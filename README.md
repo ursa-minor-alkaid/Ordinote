@@ -1,2 +1,4 @@
-- version: `1.1`
-- update: `2026年9月3日`
+# Ordinote: General Note Organizer
+
+- version: `0.5.0`
+- update: `2026.09.03`
