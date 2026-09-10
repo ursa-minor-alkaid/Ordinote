@@ -1,5 +1,9 @@
 # Ordinote: General Note Organizer
 
+* version: `1.0.0-beta`
+
+* update: `2026.09.10`
+
 通用笔记整理技能（非实验笔记——实验笔记请用 `expnote-organizer`），处理 OCR 识别笔记、课堂笔记、读书笔记等各类 markdown 笔记的整理、合并、补充与归档。
 
 ## 功能
@@ -24,9 +28,4 @@
 
 对模型说"整理笔记"、"补充完善这篇笔记"、"整理这个文件夹"、"把这个 PPT 整理成文档"等即可触发对应功能；技能入口与各功能的详细规范见 `SKILL.md` 与 `references/`。
 
-## 版本
-
-* version: `1.0.0-beta`
-
-* update: `2026.09.10`
 
