@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MinerU API 文字提取脚本（ordinote-input 功能 · 阶段一 · 云端备选）
+MinerU API 文字提取脚本（ordinote-extract 功能 · 云端备选）
 
 功能：
     调用 MinerU 精准解析 API（/api/v4），从 PDF/图片/DOC/PPT 等文件中提取
@@ -16,16 +16,15 @@ MinerU API 文字提取脚本（ordinote-input 功能 · 阶段一 · 云端备�
     分批提交（每批 ≤ 50 个，官方单批上限 200 个），每个文件各自生成
     {原文件名}-提取.md。
 
-    提取文件是"原始素材"，后续按 references/ordinote-input.md 的阶段二
-    规则做轻量整理（修错别字、去空格换行等）。
+    提取文件是"原始素材"，后续按 references/ordinote-wash.md 的规则
+    做整理（修错别字、去空格换行等）。
 
 用法：
     python mineru_api.py <文件路径> [更多文件路径...] [选项]
     （文件路径可为 PDF/PPT/DOC/图片；可一次传多个文件批量提取）
 
 选项：
-    --token <token>      MinerU Token（优先级最高）
-    --token-file <路径>  从本地文件读取 Token；不传则按顺序查找默认文件
+    --token <token>      MinerU Token（优先级最高，临时覆盖用）
     --model <name>       模型版本：pipeline / vlm（默认，推荐）/ MinerU-HTML
     --pages <范围>       只解析指定页码，如 "1-50"、"2,4-6"（超长/超页文档分批用）
     --no-ocr             关闭 OCR（默认开启；扫描件建议保持开启）
@@ -33,13 +32,13 @@ MinerU API 文字提取脚本（ordinote-input 功能 · 阶段一 · 云端备�
     --no-auto-install    缺少依赖库时不自动安装
     --install-deps       只安装依赖后退出（供交接前预热）
 
-Token 配置（优先级从高到低，任选其一即可）：
-    1) 命令行参数  --token <token>
-    2) 本地文件    --token-file <路径>
-    3) 环境变量    MINERU_API_TOKEN
-    4) 默认文件    scripts/mineru_token.txt  或  ~/.mineru_token
-       文件为纯 Token 一行即可；也支持 .env 风格 "MINERU_API_TOKEN=xxx"
+Token 配置（日常只需配置一次环境变量；`--token` 仅用于临时覆盖，优先级更高）：
+    1) 环境变量    MINERU_API_TOKEN（推荐，用 PowerShell 永久写入）
+       [Environment]::SetEnvironmentVariable("MINERU_API_TOKEN", "你的token", "User")
+       重开终端 / Trae 后生效；临时用可写 $env:MINERU_API_TOKEN = "你的token"
+    2) 命令行参数  --token <token>（不推荐长期使用：会遗留在命令历史里）
     Token 需在 https://mineru.net/apiManage/docs 的"API 管理"页自行创建
+    注意：不支持把 Token 写在磁盘文件里，避免明文泄露
 
 输出：
     在源文件同目录下生成 {原文件名}-提取.md
@@ -78,10 +77,6 @@ BATCH_RESULT_URL = f"{BASE_URL}/api/v4/extract-results/batch/{{batch_id}}"  # �
 
 # Token 环境变量名
 TOKEN_ENV = "MINERU_API_TOKEN"
-
-# 默认 Token 文件：脚本同目录的 mineru_token.txt，以及用户主目录的 ~/.mineru_token
-SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
-DEFAULT_TOKEN_FILES = [SCRIPT_DIR / "mineru_token.txt", pathlib.Path.home() / ".mineru_token"]
 
 # 模型版本：pipeline（默认）/ vlm（推荐）/ MinerU-HTML（仅 html 文件）
 DEFAULT_MODEL = "vlm"
@@ -213,56 +208,20 @@ def pop_option(args, name):
     return value
 
 
-def read_token_file(path):
-    """从本地文件读取 Token。
-
-    兼容两种写法：
-      1) 纯 Token 一行：            abcdef123456
-      2) .env 风格：                MINERU_API_TOKEN=abcdef123456
-    忽略空行与 # 开头的注释行。
-    """
-    try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
-    except OSError as e:
-        raise ExtractError(3, f"读取 Token 文件失败：{path}（{e}）")
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            key, _, value = line.partition("=")
-            if key.strip() != TOKEN_ENV:
-                continue
-            line = value.strip()
-        if line:
-            return line
-    raise ExtractError(3, f"Token 文件内容为空或格式不正确：{path}")
-
-
-def resolve_token(argv_token, token_file):
-    """确定 Token，优先级：--token > --token-file > 环境变量 > 默认文件。"""
+def resolve_token(argv_token):
+    """确定 Token，优先级：--token > 环境变量。"""
     if argv_token:
         return argv_token.strip()
-
-    if token_file:
-        return read_token_file(pathlib.Path(token_file).expanduser())
 
     env_token = os.environ.get(TOKEN_ENV, "").strip()
     if env_token:
         return env_token
 
-    for candidate in DEFAULT_TOKEN_FILES:
-        if candidate.is_file():
-            return read_token_file(candidate)
-
-    default_hint = "、".join(str(p) for p in DEFAULT_TOKEN_FILES)
     raise ExtractError(
         3, f"未配置 MinerU API Token。请在 https://mineru.net/apiManage/docs "
-           f"的\"API 管理\"页创建 Token，然后用以下任一方式配置："
-           f"1) 运行参数 --token <token>；"
-           f"2) 运行参数 --token-file <路径>；"
-           f"3) 设置环境变量 {TOKEN_ENV}；"
-           f"4) 把 Token 写入默认文件：{default_hint}")
+           f"的\"API 管理\"页创建 Token，然后用 PowerShell 永久写入环境变量："
+           f'[Environment]::SetEnvironmentVariable("{TOKEN_ENV}", "你的token", "User")，'
+           f"重开终端后生效；或用 --token <token> 临时指定。")
 
 
 def collect_items(args):
@@ -605,7 +564,6 @@ def main():
 
     try:
         token_arg = pop_option(args, "--token")
-        token_file = pop_option(args, "--token-file")
         model = pop_option(args, "--model") or DEFAULT_MODEL
         timeout_arg = pop_option(args, "--timeout")
         page_ranges = pop_option(args, "--pages")
@@ -629,7 +587,7 @@ def main():
         sys.exit(1)
 
     try:
-        token = resolve_token(token_arg, token_file)
+        token = resolve_token(token_arg)
         requests = ensure_module(["requests"], "requests", "调用 MinerU API")
         items = collect_items(args)
     except ExtractError as e:

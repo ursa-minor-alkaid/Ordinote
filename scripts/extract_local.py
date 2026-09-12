@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-本地 PDF/PPT 文字提取脚本（ordinote-input 功能 · 阶段一）
+本地 PDF/PPT 文字提取脚本（ordinote-extract 功能）
 
 功能：
     从 PDF / PPTX 文件中提取全部文字，生成 markdown 提取文件。
-    提取文件是"原始素材"，后续按 references/ordinote-input.md 的
-    阶段二规则做轻量整理（修错别字、去空格换行等）。
+    提取文件是"原始素材"，后续按 references/ordinote-wash.md 的
+    规则做整理（修错别字、去空格换行等）。
 
 用法：
     python extract_local.py <文件路径> [更多文件路径...]
@@ -34,7 +34,7 @@ from datetime import datetime
 # 常量
 # ------------------------------------------------------------
 
-# 各页（幻灯片）之间的分隔线；阶段二整理时会保留它作为结构线索
+# 各页（幻灯片）之间的分隔线；后续整理时会保留它作为结构线索
 PAGE_SEPARATOR = "\n\n---\n\n"
 
 # 文件头注释：记录来源信息。HTML 注释不会被渲染，仅供追溯
