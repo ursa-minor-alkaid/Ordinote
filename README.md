@@ -11,12 +11,12 @@
 
 | # | 功能      | 说明                                                                | 定义文件                                  |
 | - | ------- | ----------------------------------------------------------------- | ------------------------------------- |
-| 1 | 初始化整理   | 整理原始 OCR 笔记：修错别字、按板块归类（分类规则见 `ordinote-standardize.md`）、公式转 LaTeX；不添加不删改内容             | `references/ordinote-wash.md`         |
-| 2 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；母/子内容零删改                      | `references/ordinote-add.md`          |
-| 3 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
-| 4 | 规范化整理   | 将笔记重组为结构清晰的整理版（`{原文件名}-整理版.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容 | `references/ordinote-standardize.md`    |
+| 1 | PDF/PPT/图片提取 | 调用脚本提取 PDF/PPT/DOC/图片文字为提取稿（本地或 MinerU API）；只负责提取，整理交由 `ordinote-wash`；提取失败如实告知，不编造 | `references/ordinote-extract.md`        |
+| 2 | 噪音清理     | 清理原始文字稿（OCR 识别 / 录音转文字）：修错别字、修口音、公式转 LaTeX、去除提取噪音；在原文件上修改另存为 `笔记去噪-{YYMMDD}.md`；不添加不删改内容             | `references/ordinote-wash.md`         |
+| 3 | 规范化整理   | 将笔记重组为结构清晰的标准化笔记（`{原文件名}-标准化.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容，疑点用 `<mark>` 标注 | `references/ordinote-standardize.md`    |
+| 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；母/子内容零删改                      | `references/ordinote-add.md`          |
 | 5 | 文件夹结构整理 | 规划目标文件夹的笔记归档结构：先出方案（逻辑归属、聚类、合理嵌套），用户确认后才移动文件；只移动，不删改、不重命名         | `references/ordinote-organize.md` |
-| 6 | PDF/PPT/图片提取 | 调用脚本提取 PDF/PPT/DOC/图片文字为提取稿（本地或 MinerU API）；只负责提取，整理交由 `ordinote-wash`；提取失败如实告知，不编造 | `references/ordinote-extract.md`        |
+| 6 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
 
 ## 脚本
 
