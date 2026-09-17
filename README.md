@@ -1,7 +1,7 @@
 <h1 align="center">Ordinote: General Note Organizer</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0--beta.1-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.1.1-blue" alt="version">
   <img src="https://img.shields.io/badge/update-2026.09.12-green" alt="update">
 </p>
 
@@ -75,6 +75,7 @@ flowchart TB
     n8 --> n9["organize"] & n10["refine"]
     n11 --> n8
     n10 --> n12["自行整理"]
+    n13["补充图片"] --> n8
 
     n1@{ shape: cyl}
     n2@{ shape: rounded}
@@ -87,11 +88,14 @@ flowchart TB
     n9@{ shape: rounded}
     n10@{ shape: rounded}
     n12@{ shape: lean-r}
+    n13@{ shape: lean-r}
+
     style n1 fill:#BBDEFB,stroke:#2962FF
     style n4 stroke:#2962FF,fill:#BBDEFB
     style n5 fill:#C8E6C9,stroke:#00C853
     style n7 stroke:#2962FF,fill:#BBDEFB
     style n8 fill:#FFCDD2,stroke:#D50000
     style n12 stroke:#00C853,fill:#C8E6C9
+    style n13 stroke:#00C853,fill:#C8E6C9
 ```
 
