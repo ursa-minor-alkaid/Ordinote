@@ -1,7 +1,7 @@
 <h1 align="center">Ordinote: General Note Organizer</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version">
   <img src="https://img.shields.io/badge/update-2026.09.29-green" alt="update">
 </p>
 

@@ -20,7 +20,7 @@ Word（.docx）→ Markdown 转换脚本（ordinote-extract 功能 · Word 分�
     - 表格 → pipe 表格；合并单元格自动去重；全空表格跳过并提示
     - 超链接 → [文本](网址)（网址含空格时用 <网址> 形式）
     - 软回车（w:br / w:cr）→ <br>
-    - 内嵌图片 → 导出到输出目录 images/ 子文件夹，正文以相对路径引用
+    - 内嵌图片 → 导出到输出目录 assets/ 子文件夹，正文以相对路径引用
     - 引用样式（Quote / Intense Quote / 引用）→ > 引用块（相邻引用段合并）
     - 生成信息行（第二段，本项目约定）→ 整行斜体；--no-meta-italic 可关闭
 
@@ -187,7 +187,7 @@ class DocxConverter:
         self.doc = doc
         self.stem = stem                      # 输出 md 主名（图片文件名前缀）
         self.out_dir = Path(out_dir)
-        self.img_dir = self.out_dir / "images"
+        self.img_dir = self.out_dir / "assets"
         self.img_seq = 0
         self.has_title = False
         self.numbering = self._load_numbering()
@@ -402,7 +402,7 @@ class DocxConverter:
             name = f"{self.stem}-img{self.img_seq}{ext}"
             self.img_dir.mkdir(parents=True, exist_ok=True)
             (self.img_dir / name).write_bytes(blob)
-            rel_path = f"images/{name}"
+            rel_path = f"assets/{name}"
             if " " in rel_path:
                 rel_path = f"<{rel_path}>"
             self.stats["images"] += 1

@@ -38,11 +38,11 @@ Area/
 ├── ai/               # 供 llm 使用的文件夹
 │   ├── context/          # 提取过便于 llm 阅读的文件（.txt 或 .md）
 │   ├── ai_outputs/       # llm 输出的未经审核的内容，经仔细审核的放入 resources 文件夹
-│   └── 其余文件夹/         # 按需添加
+│   └── 其余文件夹/         # 按需添加，一般为 ai 的工程文件，统一放在 ai/ 下便于管理
 ├── archives/         # 已归档内容、已结束项目
-├── originals/        # 原始文件档案源头（如原始书籍扫描 pdf）
+├── originals/        # 原始文件档案源头（如，原始书籍扫描 pdf；像是一个包罗万象的图书馆一样）
 ├── inbox/            # 输入的（未整理）资料
-├── images/           # 图片
+├── assets/           # 以图片为首的固定资源，可能还包括 tikz 代码、svg 等
 ├── resources/        # 常用资源
 ├── 附属项目文件夹、其余文件
 ├── README.md         # 如该项目需要分享，则这个文件是给别人读的
@@ -55,7 +55,7 @@ Area/
 
 ```text
 Project/
-├── images/           # 图片
+├── assets/           # 以图片为首的固定资源，可能还包括 tikz 代码、svg 等
 ├── resources/        # 该项目的常用资源
 ├── 项目文件夹或其余文件
 ├── README.md         # 如该项目需要分享，则这个文件是给别人读的
@@ -83,8 +83,8 @@ Project/
 #### 3. 按标准结构自动新建文件夹
 
 - 对照"标准 Area 结构"与"标准 Project 结构"，列出主要项目与各附属项目缺失的文件夹清单，并**直接新建，无需等待用户确认**
-  - Area 层级：ai/（含 ai/context/、ai/ai_outputs/）、archives/、originals/、inbox/、images/、resources/
-  - Project 层级：images/、resources/
+  - Area 层级：ai/（含 ai/context/、ai/ai_outputs/）、archives/、originals/、inbox/、assets/、resources/
+  - Project 层级：assets/、resources/
 - 已存在的同名文件夹一律保留，不重复新建、不覆盖、不删除其中内容
 - 只新建文件夹；README.md、ROADMAP.md 等属于文件，不在自动新建范围内，可在方案中提示用户按需创建
 - **本步骤不得移动、重命名、删除、修改任何文件**
@@ -120,7 +120,7 @@ Project/
 
 对主要项目下的附属项目（Project）进行聚类、分类、整理。**重点检查"项目文件夹或其余文件"部分的内容**：各附属项目的归属是否合理、项目内的文件夹与散落文件应如何聚类分类，给出分类与规划意见。
 
-标准结构文件夹（ai/、archives/、originals/、inbox/、images/、resources/ 等）的建立与 Area 领域分类的评估由功能一负责，本功能不涉及。
+标准结构文件夹（ai/、archives/、originals/、inbox/、assets/、resources/ 等）的建立与 Area 领域分类的评估由功能一负责，本功能不涉及。
 
 ### 阶段一：分析与方案生成（不移动任何文件）
 
