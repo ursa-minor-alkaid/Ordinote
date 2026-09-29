@@ -1,8 +1,8 @@
 <h1 align="center">Ordinote: General Note Organizer</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.0-blue" alt="version">
-  <img src="https://img.shields.io/badge/update-2026.09.17-green" alt="update">
+  <img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/update-2026.09.28-green" alt="update">
 </p>
 
 通用笔记整理技能，处理 OCR 识别笔记、课堂笔记、读书笔记等各类 markdown 笔记的整理、合并、补充与归档。
@@ -11,8 +11,8 @@
 
 | # | 功能      | 说明                                                                | 定义文件                                  |
 | - | ------- | ----------------------------------------------------------------- | ------------------------------------- |
-| 1 | PDF/PPT/图片提取 | 调用脚本提取 PDF/PPT/DOC/图片文字为提取稿（本地或 MinerU API）；只负责提取，整理交由 `ordinote-wash`；提取失败如实告知，不编造 | `references/ordinote-extract.md`        |
-| 2 | 噪音清理     | 清理原始文字稿（OCR 识别 / 录音转文字）：修错别字、修口音、公式转 LaTeX、去除提取噪音；在原文件上修改另存为 `笔记去噪-{YYMMDD}.md`；不添加不删改内容             | `references/ordinote-wash.md`         |
+| 1 | PDF/PPT/Word/图片提取 | 调用脚本提取 PDF/PPT/DOC/图片文字为提取稿（本地或 MinerU API）；Word（.docx）本地转换为保留格式的 markdown；只负责提取，整理交由 `ordinote-wash`；提取失败如实告知，不编造 | `references/ordinote-extract.md`        |
+| 2 | 噪音清理     | 清理原始文字稿（OCR 识别 / 录音转文字 / Word 提取稿）：修错别字、修口音、公式转 LaTeX、去除提取噪音；在原文件上修改另存为 `笔记去噪-{YYMMDD}.md`；不添加不删改内容             | `references/ordinote-wash.md`         |
 | 3 | 规范化整理   | 将笔记重组为结构清晰的标准化笔记（`{原文件名}-标准化.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容，疑点用 `<mark>` 标注 | `references/ordinote-standardize.md`    |
 | 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；母/子内容零删改                      | `references/ordinote-add.md`          |
 | 5 | 文件夹结构整理 | 规划目标文件夹的笔记归档结构：先出方案（逻辑归属、聚类、合理嵌套），用户确认后才移动文件；只移动，不删改、不重命名         | `references/ordinote-organize.md` |
@@ -23,7 +23,8 @@
 
 | 脚本                         | 说明                                                                                                                                                                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/extract_local.py` | 本地提取 PDF/PPTX 全部文字，生成 `{原文件名}-提取.md`；分页/分幻灯片以 `---` 分隔，保留 PPT 演讲者备注；扫描版 PDF 提取失败时退出码 2                                                                                          |
+| `scripts/extract_pdf_pptx.py` | 本地提取 PDF/PPTX 全部文字，生成 `{原文件名}-提取.md`；分页/分幻灯片以 `---` 分隔，保留 PPT 演讲者备注；扫描版 PDF 提取失败时退出码 2                                                                                          |
+| `scripts/extract_docx.py`   | 本地提取 Word（.docx）为 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 mark，霞鹜文楷正文不误伤；支持目录批量、去文件名版本号、指定输出目录与后缀；旧版 .doc 不支持，退出码 1 并提示另存为 .docx |
 | `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
 | `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式与 MPE 预览一致：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
 
@@ -40,7 +41,7 @@
 
 ### 配置 MinerU API
 
-云端提取（`scripts/mineru_api.py`）需配置 Token；本地提取（`extract_local.py`）无需配置。
+云端提取（`scripts/mineru_api.py`）需配置 Token；本地提取（`extract_pdf_pptx.py`）无需配置。
 
 1. 在 [MinerU API 管理页](https://mineru.net/apiManage/docs) 创建 Token
 2. 用 PowerShell 永久写入环境变量（一台电脑配置一次即可）：
@@ -77,6 +78,7 @@ python scripts/md2pdf.py <文件或目录> [--out 输出目录] [--theme github-
 - 圆柱：输入资料
 - 平行四边形：人工处理
 - 圆角矩形：LLM + skill 处理
+- 长 D 形：其他 skill
 
 ```mermaid
 ---
@@ -92,11 +94,12 @@ flowchart TB
     n3 --> n6["standardize"] & n11["add"]
     n7["临时电子笔记"] --> n6 & n11
     n6 --> n8>"核心笔记文件"]
-    n8 --> n9["organize"] & n10["refine"]
+    n8 --> n9["organize"] & n10["enrich"] & n17["resenote"]
     n11 --> n8
     n10 --> n12["自行整理"]
     n13["补充图片"] --> n8
     n12 --> n14["export"] & n15["部分手动导出"]
+    n16["code-fig"] --> n8
 
     n1@{ shape: cyl}
     n2@{ shape: rounded}
@@ -108,17 +111,21 @@ flowchart TB
     n7@{ shape: cyl}
     n9@{ shape: rounded}
     n10@{ shape: rounded}
+    n17@{ shape: delay}
     n12@{ shape: lean-r}
     n13@{ shape: lean-r}
     n14@{ shape: rounded}
     n15@{ shape: lean-r}
+    n16@{ shape: delay}
     style n1 fill:#BBDEFB,stroke:#2962FF
     style n4 stroke:#2962FF,fill:#BBDEFB
     style n5 fill:#C8E6C9,stroke:#00C853
     style n7 stroke:#2962FF,fill:#BBDEFB
     style n8 fill:#FFCDD2,stroke:#D50000
+    style n17 fill:#FFF9C4,stroke:#FFD600
     style n12 stroke:#00C853,fill:#C8E6C9
     style n13 stroke:#00C853,fill:#C8E6C9
     style n15 stroke:#00C853,fill:#C8E6C9
+    style n16 fill:#FFF9C4,stroke:#FFD600
 ```
 

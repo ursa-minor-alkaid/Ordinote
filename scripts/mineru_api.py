@@ -6,7 +6,7 @@ MinerU API 文字提取脚本（ordinote-extract 功能 · 云端备选）
 功能：
     调用 MinerU 精准解析 API（/api/v4），从 PDF/图片/DOC/PPT 等文件中提取
     文字，生成 markdown 提取文件。适用于扫描件、复杂版式——即本地脚本
-    extract_local.py 提取失败或效果较差时的备选方案。
+    extract_pdf_pptx.py 提取失败或效果较差时的备选方案。
 
     支持的文件类型：pdf / doc / docx / ppt / pptx / 图片（png / jpg /
     jpeg / jp2 / webp / gif / bmp）。支持直接上传图片提取文字（按其内容
@@ -43,7 +43,7 @@ Token 配置（日常只需配置一次环境变量；`--token` 仅用于临时�
 输出：
     在源文件同目录下生成 {原文件名}-提取.md
     - 内容取自 MinerU 结果压缩包中的 full.md（已经是干净 Markdown）
-    - 与 extract_local.py 不同：MinerU 不返回逐页文字，故正文中无 --- 分页线
+    - 与 extract_pdf_pptx.py 不同：MinerU 不返回逐页文字，故正文中无 --- 分页线
 
 退出码：
     0  全部提取成功
@@ -115,7 +115,7 @@ class ExtractError(Exception):
 
 
 # ------------------------------------------------------------
-# 依赖自动安装（与 extract_local.py 保持一致的做法）
+# 依赖自动安装（与 extract_pdf_pptx.py 保持一致的做法）
 # ------------------------------------------------------------
 
 DEPENDENCIES = [

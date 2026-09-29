@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-本地 PDF/PPT 文字提取脚本（ordinote-extract 功能）
+本地 PDF/PPTX 文字提取脚本（ordinote-extract 功能）
 
 功能：
     从 PDF / PPTX 文件中提取全部文字，生成 markdown 提取文件。
@@ -9,7 +9,7 @@
     规则做整理（修错别字、去空格换行等）。
 
 用法：
-    python extract_local.py <文件路径> [更多文件路径...]
+    python extract_pdf_pptx.py <文件路径> [更多文件路径...]
 
 输出：
     在源文件同目录下生成 {原文件名}-提取.md
@@ -39,7 +39,7 @@ PAGE_SEPARATOR = "\n\n---\n\n"
 
 # 文件头注释：记录来源信息。HTML 注释不会被渲染，仅供追溯
 HEADER_TEMPLATE = (
-    "<!-- 本文件由 extract_local.py 自动提取生成 -->\n"
+    "<!-- 本文件由 extract_pdf_pptx.py 自动提取生成 -->\n"
     "<!-- 源文件：{name} | {kind}数：{count} | 提取时间：{time} -->\n"
 )
 
