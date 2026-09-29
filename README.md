@@ -1,8 +1,8 @@
 <h1 align="center">Ordinote: General Note Organizer</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.3.0-blue" alt="version">
-  <img src="https://img.shields.io/badge/update-2026.09.28-green" alt="update">
+  <img src="https://img.shields.io/badge/version-1.5.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/update-2026.09.29-green" alt="update">
 </p>
 
 通用笔记整理技能，处理 OCR 识别笔记、课堂笔记、读书笔记等各类 markdown 笔记的整理、合并、补充与归档。
@@ -15,7 +15,7 @@
 | 2 | 噪音清理     | 清理原始文字稿（OCR 识别 / 录音转文字 / Word 提取稿）：修错别字、修口音、公式转 LaTeX、去除提取噪音；在原文件上修改另存为 `笔记去噪-{YYMMDD}.md`；不添加不删改内容             | `references/ordinote-wash.md`         |
 | 3 | 规范化整理   | 将笔记重组为结构清晰的标准化笔记（`{原文件名}-标准化.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容，疑点用 `<mark>` 标注 | `references/ordinote-standardize.md`    |
 | 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；母/子内容零删改                      | `references/ordinote-add.md`          |
-| 5 | 文件夹结构整理 | 规划目标文件夹的笔记归档结构：先出方案（逻辑归属、聚类、合理嵌套），用户确认后才移动文件；只移动，不删改、不重命名         | `references/ordinote-organize.md` |
+| 5 | 文件夹结构整理 | 两个并行子功能，基于 PARA 思想（Area → Projects → files/docs）：structure 检查确认 Area / Project 归属、评估领域分类合理性（仅建议不修改）、阶段一按标准结构自动新建全部所需文件夹（不移动任何文件）并给出归类意见；organize 对主要项目下的附属项目聚类、分类、整理，重点检查"项目文件夹或其余文件"部分；文件移动均先出方案、经用户确认后执行；只新建与移动，不删改、不重命名 | `references/ordinote-organize.md` |
 | 6 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
 | 7 | 导出 PDF   | 把单个笔记或整个目录批量导出为 PDF：版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致；源笔记只读，不下载任何依赖 | `references/ordinote-export.md`       |
 
@@ -37,7 +37,7 @@
 
 ### 在对话中激活
 
-对模型说"整理笔记"、"补充完善这篇笔记"、"整理这个文件夹"、"把这个 PPT 整理成文档"等即可触发对应功能；技能入口与各功能的详细规范见 `SKILL.md` 与 `references/`
+对模型说"整理笔记"、"补充完善这篇笔记"、"整理这个文件夹"、"检查项目结构"、"把这个 PPT 整理成文档"等即可触发对应功能；技能入口与各功能的详细规范见 `SKILL.md` 与 `references/`
 
 ### 配置 MinerU API
 
