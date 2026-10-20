@@ -2,7 +2,7 @@
 
 ## 功能定义
 
-将 PDF/PPT/Word/图片 文件中的文字内容提取出来，生成提取稿（中间文档）。本功能**只负责提取**：提取稿**不是最终笔记**，后续通过 `ordinote-wash`（初始化整理，含修错别字、去噪、公式转写等整理规则）或 `ordinote-add`（添加内容）功能将其转化为笔记。Word（.docx）由 `extract_docx.py` 本地转换并保留格式，输出可直接作为正式笔记。
+将 PDF/PPT/Word/图片 文件中的文字内容提取出来，生成提取稿（中间文档）。本功能**只负责提取**：提取稿**不是最终笔记**，后续通过 `ordinote-wash`（初始化整理，含修错别字、去噪、公式转写等整理规则）或 `ordinote-add`（添加内容）功能将其转化为笔记。Word（.docx）由 `extract_docx.py` 本地转换并保留格式，输出可直接作为正式笔记。MinerU 云端提取默认只接收 Markdown；JSON 版式信息为可选项，仅在用户显式要求时接收。
 
 ---
 
@@ -11,11 +11,12 @@
 1. **选择提取方式**：`scripts/` 目录下提供三种提取脚本：
    - `scripts/extract_pdf_pptx.py`：本地 Python 脚本直接提取（适用于**文字版** PDF/PPT；详见下文「PDF/PPT 提取」一节；已实现）
    - `scripts/extract_docx.py`：本地 Python 脚本把 **Word（.docx）** 转换为 markdown（保留格式信息；详见下文「Word 提取」一节；已实现）
-   - `scripts/mineru_api.py`：调用 MinerU 精准解析 API 提取（适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及**图片**，且支持**一次上传多个文件批量提取**；已实现，需先配置 Token）
+   - `scripts/mineru_api.py`：调用 MinerU 精准解析 API 提取（适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及**图片**，且支持**一次上传多个文件批量提取**；已实现，需先配置 Token；默认仅输出 Markdown，JSON 需显式开启）
    - 默认先尝试本地脚本；失败或效果差时再改用 MinerU API（旧版 `.doc` 本地脚本不支持：请先用 Word 另存为 `.docx`，或改用 MinerU API）
 2. **运行脚本提取文字**，生成提取文件：
    - 输出位置：与源文件同一目录
    - 命名规则：`{原文件名}-提取.md`（或 .txt）
+   - 可选 JSON 旁证：MinerU 默认不保存 JSON；仅当用户显式要求保留版式/结构信息时，调用时加 `--save-json`，额外生成 `{原文件名}-提取-content_list.json` 与 `{原文件名}-提取-layout.json`。图片暂不导出。
 3. **失败处理（必须遵守）**：
    - 脚本无法运行、无法提取、或提取结果为空 → **必须如实告知用户**，说明具体原因
    - 如实告知用户，不要试图用其他方式替代提取
@@ -152,9 +153,32 @@ python mineru_api.py <文件路径> [更多文件路径...]
 | `--model <name>` | 模型版本：`vlm`（脚本默认，推荐）/ `pipeline` / `MinerU-HTML` |
 | `--pages <范围>` | 只解析指定页码，如 `1-200`、`2,4-6`；用于超长/超页文档分批解析 |
 | `--no-ocr` | 关闭 OCR（默认开启；扫描件建议保持开启） |
+| `--save-json` | 额外保存 `content_list.json` 与 `layout.json` 旁证文件（默认关闭；仅用户显式要求版式信息时使用） |
 | `--timeout <秒>` | 等待解析结果的超时，默认 900 秒 |
 | `--no-auto-install` | 缺依赖库（requests）时不自动安装 |
 | `--install-deps` | 只安装依赖后退出 |
+
+### JSON 旁证输出（默认关闭）
+
+MinerU 结果压缩包里除 `full.md` 外还有 `content_list.json`、`layout.json`、`model.json`。本脚本默认只取 `full.md`，不保存任何 JSON，行为与旧版一致。
+
+只有用户显式要求保留版式/结构信息（例如「同时保留 JSON」「保留版式信息」）时，才加 `--save-json`：
+
+```bash
+python mineru_api.py 讲义.pdf --save-json
+```
+
+此时每个源文件除 `{原文件名}-提取.md` 外，还会在同目录写出：
+
+- `{原文件名}-提取-content_list.json`：按阅读顺序的内容列表，含 `page_idx`、内容类型、`text_level`、bbox、表格 HTML、图注表注
+- `{原文件名}-提取-layout.json`：即 middle.json，含页内块与行的几何、字号、页眉页脚等 discarded 块
+
+约定：
+
+- 不保存 `model.json`：模型原始推理结果体积大，对整理没有直接价值
+- 不解压 `images/`：正文中的图片引用保持 MinerU 原始相对路径
+- JSON 只作旁证文件，不并入提取稿正文；整理时按需查阅，不整份读入上下文
+- 未显式要求时不得自行加 `--save-json`
 
 ### 支持的文件类型与批量上传
 
@@ -187,7 +211,9 @@ python mineru_api.py 第一章.pdf 第二章.pdf 架构图.png
 
 ### 与本地脚本的差异
 
-- 输出同样为 `{原文件名}-提取.md`，但**正文中没有 `---` 分页线**：MinerU 只返回整篇 Markdown（取自结果压缩包的 `full.md`），不返回逐页文字
+- 输出同样为 `{原文件名}-提取.md`，但**正文中没有 `---` 分页线**：MinerU 只返回整篇 Markdown（取自结果压缩包的 `full.md`），不返回逐页文字；需要页码时显式加 `--save-json`，从 `content_list.json` 的 `page_idx` 获取
+- JSON 为可选输出：默认不接收任何 JSON；显式 `--save-json` 时保存 `content_list.json` 与 `layout.json`（不保存 `model.json`）
+- 图片不导出：结果包中的 `images/` 不解压，`full.md` 里的图片引用保持原始相对路径
 - Word（`.docx`）提取优先用本地 `scripts/extract_docx.py`；旧版 `.doc`、扫描件或复杂版式的 Word 文档可改用 MinerU API
 - 内容为 MinerU 解析后的干净 Markdown（含公式 LaTeX、表格等）；后续用 `ordinote-wash` 整理时仍要检查有无缺页
 - 单文件大小上限 200 MB、页数上限 600 页（精准解析 API 官方限制）；多个文件会自动分批（每批 ≤ 50 个）上传解析
@@ -199,5 +225,6 @@ python mineru_api.py 第一章.pdf 第二章.pdf 架构图.png
 ## 注意事项
 
 1. **不删除原始提取文件**（`{原文件名}-提取.md`）：它是核对提取质量的依据；用户要求删除时才删除
-2. **汇报义务**：完成后向用户汇报——提取方式、生成的文件、提取质量（是否完整、有无乱码或缺页）
+2. **汇报义务**：完成后向用户汇报——提取方式、生成的文件、提取质量（是否完整、有无乱码或缺页）；启用 `--save-json` 时一并说明生成的 JSON 文件
+3. **JSON 旁证文件为可选产物**：未显式要求时不生成；**已生成时也不并入提取稿正文**，整理时按需查阅，不整份读入上下文
 

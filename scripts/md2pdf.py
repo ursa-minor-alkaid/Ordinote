@@ -332,7 +332,7 @@ def protect_math(text):
                 return match.group(0)
             raw = match.group(0)
             display = raw.startswith("$$")
-            tex = " ".join(raw[2:-2 if display else -1].split())
+            tex = " ".join((raw[2:-2] if display else raw[1:-1]).split())
             cls = "math math-display" if display else "math"
             return (
                 f'<span class="{cls}" data-tex="{html_lib.escape(tex, quote=True)}">'

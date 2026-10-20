@@ -1,8 +1,8 @@
 <h1 align="center">Ordinote: General Note Organizer</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.5.1-blue" alt="version">
-  <img src="https://img.shields.io/badge/update-2026.09.29-green" alt="update">
+  <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/update-2026.10.20-green" alt="update">
 </p>
 
 通用笔记整理技能，处理 OCR 识别笔记、课堂笔记、读书笔记等各类 markdown 笔记的整理、合并、补充与归档。
@@ -14,10 +14,9 @@
 | 1 | PDF/PPT/Word/图片提取 | 调用脚本提取 PDF/PPT/DOC/图片文字为提取稿（本地或 MinerU API）；Word（.docx）本地转换为保留格式的 markdown；只负责提取，整理交由 `ordinote-wash`；提取失败如实告知，不编造 | `references/ordinote-extract.md`        |
 | 2 | 噪音清理     | 清理原始文字稿（OCR 识别 / 录音转文字 / Word 提取稿）：修错别字、修口音、公式转 LaTeX、去除提取噪音；在原文件上修改另存为 `笔记去噪-{YYMMDD}.md`；不添加不删改内容             | `references/ordinote-wash.md`         |
 | 3 | 规范化整理   | 将笔记重组为结构清晰的标准化笔记（`{原文件名}-标准化.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容，疑点用 `<mark>` 标注 | `references/ordinote-standardize.md`    |
-| 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；母/子内容零删改                      | `references/ordinote-add.md`          |
-| 5 | 文件夹结构整理 | 两个并行子功能，基于 PARA 思想（Area → Projects → files/docs）：structure 检查确认 Area / Project 归属、评估领域分类合理性（仅建议不修改）、阶段一按标准结构自动新建全部所需文件夹（不移动任何文件）并给出归类意见；organize 对主要项目下的附属项目聚类、分类、整理，重点检查"项目文件夹或其余文件"部分；文件移动均先出方案、经用户确认后执行；只新建与移动，不删改、不重命名 | `references/ordinote-organize.md` |
-| 6 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
-| 7 | 导出 PDF   | 把单个笔记或整个目录批量导出为 PDF：版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致；源笔记只读，不下载任何依赖 | `references/ordinote-export.md`       |
+| 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；分无损add（全部归入，母/子内容零删改）与去重add（先比对母笔记已有内容、剔除重复部分，生成合并计划经用户确认后再加入）两种模式，未指定模式时先询问用户 | `references/ordinote-add.md`          |
+| 5 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
+| 6 | 导出 PDF / Word | 把单个笔记或整个目录批量导出为 PDF 或 Word：PDF 版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致；Word 由 python-docx 生成，忠实还原标题等级、文字高亮与背景色、图片、表格、列表等；源笔记只读 | `references/ordinote-export.md`       |
 
 ## 脚本
 
@@ -25,8 +24,9 @@
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts/extract_pdf_pptx.py` | 本地提取 PDF/PPTX 全部文字，生成 `{原文件名}-提取.md`；分页/分幻灯片以 `---` 分隔，保留 PPT 演讲者备注；扫描版 PDF 提取失败时退出码 2                                                                                          |
 | `scripts/extract_docx.py`   | 本地提取 Word（.docx）为 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 mark，霞鹜文楷正文不误伤；支持目录批量、去文件名版本号、指定输出目录与后缀；旧版 .doc 不支持，退出码 1 并提示另存为 .docx |
-| `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
+| `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；默认只输出 Markdown，显式加 `--save-json` 时才额外保存 `content_list.json` 与 `layout.json`，不导出图片；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
 | `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式与 MPE 预览一致：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
+| `scripts/md2docx.py`       | 批量把 markdown 笔记导出为 Word（.docx）：python-docx 原生构建，还原 Heading 1-6 标题样式、加粗/斜体/删除线/下划线、`<mark>` 与 span 的任意背景色文字底纹、行内代码与代码块、引用、嵌套列表、表格、超链接与图片（本地/远程/data URI，按版心缩放）；公式以 Cambria Math 保留 LaTeX 原文；依赖 `python-docx`、`markdown-it-py`，源笔记只读 |
 
 ## 使用
 
@@ -37,7 +37,11 @@
 
 ### 在对话中激活
 
-对模型说"整理笔记"、"补充完善这篇笔记"、"整理这个文件夹"、"检查项目结构"、"把这个 PPT 整理成文档"等即可触发对应功能；技能入口与各功能的详细规范见 `SKILL.md` 与 `references/`
+对模型说"整理笔记"、"补充完善这篇笔记"、"把这个 PPT 整理成文档"等即可触发对应功能；技能入口与各功能的详细规范见 `SKILL.md` 与 `references/`
+
+MinerU 提取默认只输出 markdown。需要保留版式 JSON 时，必须在对话中明确说明（如"保留版式信息""同时保留 JSON"），否则不会生成。
+
+文件夹结构与文件归类的整理已独立为 `TexturaNexus` 技能（`textura-nexus`），此类请求在其下处理。
 
 ### 配置 MinerU API
 
@@ -58,7 +62,7 @@
 
 ### 导出 PDF（需自行安装 MPE 扩展）
 
-导出功能复用本机 Markdown Preview Enhanced（MPE）扩展自带的主题样式与 mermaid 渲染库，使用前需要准备：
+PDF 导出复用本机 Markdown Preview Enhanced（MPE）扩展自带的主题样式与 mermaid 渲染库，使用前需要准备：
 
 1. **在本地的类 VS Code 客户端中自行安装 [Markdown Preview Enhanced](https://marketplace.visualstudio.com/items?itemName=shd101wyy.markdown-preview-enhanced) 扩展**（Trae / VS Code / Cursor 等任一即可）。脚本会自动搜索该扩展的安装目录并复用其中的样式与图表资源；未安装时脚本直接报错，并提示安装扩展或手动指定路径。
 2. 本机需装有 Chrome / Edge / Chromium 之一，用于无头打印。
@@ -72,6 +76,32 @@ python scripts/md2pdf.py <文件或目录> [--out 输出目录] [--theme github-
 输出默认放在源文件同目录、与源文件同名；完整选项与降级行为见 `references/ordinote-export.md`。
 
 已知差异：公式与 mermaid 图正常渲染；代码块无语法高亮；`tikz` 代码块不渲染（MPE 的 tikz 引擎在扩展内部，外部脚本无法调用），在 PDF 中以代码文本呈现。
+
+### 导出 Word
+
+Word 导出不依赖 MPE 扩展与浏览器，仅需两个 Python 库（缺失时脚本会提示安装）：
+
+```bash
+pip install python-docx markdown-it-py
+```
+
+使用方式：
+
+```bash
+python scripts/md2docx.py <文件或目录> [--out 输出目录] [--skip-existing] [--exclude 正则]
+```
+
+输出默认放在源文件同目录、与源文件同名的 .docx。还原效果：
+
+- 标题 `#` ~ `######` 对应 Word 内置 Heading 1-6 样式，可直接生成导航目录
+- `<mark>` 与 `<span style="background-color:...">` 按原色还原为文字底纹（淡粉、淡灰、黄色等均可），同时支持 span 字体颜色
+- 图片内嵌插入（相对路径、远程 URL、data URI；中文路径自动处理）；尊重 markdown 中 `<img width=...>` / `style="width:..."` 指定的尺寸（px/%/cm 等单位），未指定时按原生大小、超版心自动等比缩放
+- 加粗 / 斜体 / 删除线 / 下划线、行内代码与代码块、引用、嵌套有序无序列表、表格、超链接均按 Word 原生格式构建
+- 正文 10 号字、1.15 倍行距；页边距左右 2cm、上下 1cm
+- 公式以 Cambria Math 字体保留 LaTeX 原文（行内/块级），不转换为 Word 公式对象
+- mermaid 与 `tikz` 代码块保留为代码文本；缺失图片以红色提示文字占位并在汇总中计数
+
+完整说明见 `references/ordinote-export.md`。
 
 ### 笔记工作流
 
@@ -94,7 +124,7 @@ flowchart TB
     n3 --> n6["standardize"] & n11["add"]
     n7["临时电子笔记"] --> n6 & n11
     n6 --> n8>"核心笔记文件"]
-    n8 --> n9["organize"] & n10["enrich"] & n17["resenote"]
+    n8 --> n10["enrich"] & n17["resenote"]
     n11 --> n8
     n10 --> n12["自行整理"]
     n13["补充图片"] --> n8
@@ -109,7 +139,6 @@ flowchart TB
     n6@{ shape: rounded}
     n11@{ shape: rounded}
     n7@{ shape: cyl}
-    n9@{ shape: rounded}
     n10@{ shape: rounded}
     n17@{ shape: delay}
     n12@{ shape: lean-r}

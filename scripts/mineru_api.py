@@ -28,6 +28,7 @@ MinerU API 文字提取脚本（ordinote-extract 功能 · 云端备选）
     --model <name>       模型版本：pipeline / vlm（默认，推荐）/ MinerU-HTML
     --pages <范围>       只解析指定页码，如 "1-50"、"2,4-6"（超长/超页文档分批用）
     --no-ocr             关闭 OCR（默认开启；扫描件建议保持开启）
+    --save-json          额外保存 content_list.json 与 layout.json（默认不保存）
     --timeout <秒>       等待解析结果的超时时间，默认 900 秒
     --no-auto-install    缺少依赖库时不自动安装
     --install-deps       只安装依赖后退出（供交接前预热）
@@ -44,6 +45,12 @@ Token 配置（日常只需配置一次环境变量；`--token` 仅用于临时�
     在源文件同目录下生成 {原文件名}-提取.md
     - 内容取自 MinerU 结果压缩包中的 full.md（已经是干净 Markdown）
     - 与 extract_pdf_pptx.py 不同：MinerU 不返回逐页文字，故正文中无 --- 分页线
+    - 默认只接收 Markdown，不保存结果包中的任何 JSON
+    - 显式加 --save-json 时，额外写出（与提取稿同目录）：
+        {原文件名}-提取-content_list.json   按页的内容列表（页码、类型、层级、bbox 等）
+        {原文件名}-提取-layout.json          即 middle.json（页内块/行几何、字体、页眉页脚）
+      不保存 model.json（模型原始推理结果，体积大且无整理价值）
+    - 不解压 images/：正文中的图片引用保持 MinerU 原始相对路径
 
 退出码：
     0  全部提取成功
@@ -362,8 +369,13 @@ def find_entry(names, predicate):
     return None
 
 
-def extract_markdown(zip_bytes):
-    """从结果压缩包中取出 full.md 正文，并尽量统计页数。"""
+def extract_markdown(zip_bytes, save_json=False):
+    """从结果压缩包中取出 full.md 正文，并尽量统计页数。
+
+    save_json=True 时，同时取出 content_list.json 与 layout.json 的原始
+    字节，供后续写出旁证文件；默认不读取，保持只接收 Markdown。
+    返回 (正文, 页数, {文件标识: 字节})。
+    """
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     except zipfile.BadZipFile:
@@ -385,7 +397,17 @@ def extract_markdown(zip_bytes):
         if not text.strip():
             raise ExtractError(2, "解析结果 Markdown 内容为空")
 
-        return text, count_pages(zf, names)
+        json_blobs = {}
+        if save_json:
+            cl_name = find_entry(names, lambda n: n.lower().endswith("content_list.json"))
+            layout_name = find_entry(
+                names, lambda n: n == "layout.json" or n.endswith("/layout.json"))
+            if cl_name:
+                json_blobs["content_list"] = zf.read(cl_name)
+            if layout_name:
+                json_blobs["layout"] = zf.read(layout_name)
+
+        return text, count_pages(zf, names), json_blobs
 
 
 def count_pages(zf, names):
@@ -459,8 +481,11 @@ def download_result(requests, zip_url):
         return resp.content
 
 
-def write_extraction(path, model, text):
-    """写出 {原文件名}-提取.md，并在文件头写入来源信息。"""
+def write_extraction(path, model, text, json_blobs=None):
+    """写出 {原文件名}-提取.md；有 JSON 时一并写出旁证文件。
+
+    返回 (提取稿路径, 已写出的 JSON 文件列表)。
+    """
     header = HEADER_TEMPLATE.format(
         name=path.name,
         model=model,
@@ -468,16 +493,23 @@ def write_extraction(path, model, text):
     )
     out = path.with_name(f"{path.stem}-提取.md")
     out.write_text(header + "\n" + text.rstrip() + "\n", encoding="utf-8")
-    return out
+
+    written = []
+    for key, data in (json_blobs or {}).items():
+        side = path.with_name(f"{path.stem}-提取-{key}.json")
+        side.write_bytes(data)
+        written.append(side)
+    return out, written
 
 
 # ------------------------------------------------------------
 # 单批处理
 # ------------------------------------------------------------
 
-def process_batch(requests, token, items, model, ocr, timeout, page_ranges):
+def process_batch(requests, token, items, model, ocr, timeout, page_ranges, save_json):
     """处理一批文件：申请链接 → 上传 → 轮询 → 逐文件下载写出。
 
+    save_json=True 时额外写出 content_list.json 与 layout.json 旁证文件。
     返回各文件的退出码列表与成功计数（单个文件失败不中断其他文件）。
     """
     codes = []
@@ -512,15 +544,24 @@ def process_batch(requests, token, items, model, ocr, timeout, page_ranges):
             continue
 
         try:
-            text, pages = extract_markdown(download_result(requests, zip_url))
+            text, pages, json_blobs = extract_markdown(
+                download_result(requests, zip_url), save_json)
         except ExtractError as e:
             print(f"[失败] {e.message}")
             codes.append(e.code)
             continue
 
-        out = write_extraction(path, model, text)
+        out, json_files = write_extraction(path, model, text, json_blobs)
         page_info = f"，约 {pages} 页" if pages else ""
-        print(f"[成功] {path.name} → {out.name}（{len(text)} 字符{page_info}）")
+        json_info = "".join(f"，JSON：{f.name}" for f in json_files)
+        print(f"[成功] {path.name} → {out.name}（{len(text)} 字符{page_info}{json_info}）")
+
+        if save_json:
+            missing = [label for key, label in
+                       (("content_list", "content_list.json"), ("layout", "layout.json"))
+                       if key not in json_blobs]
+            if missing:
+                print(f"[提醒] {path.name}：结果包中未找到 {'、'.join(missing)}，对应 JSON 未写出")
         codes.append(0)
 
     return codes
@@ -562,6 +603,10 @@ def main():
     ocr = "--no-ocr" not in args
     args = [a for a in args if a != "--no-ocr"]
 
+    # JSON 输出为可选行为：只有显式加 --save-json 才接收
+    save_json = "--save-json" in args
+    args = [a for a in args if a != "--save-json"]
+
     try:
         token_arg = pop_option(args, "--token")
         model = pop_option(args, "--model") or DEFAULT_MODEL
@@ -596,12 +641,15 @@ def main():
 
     if page_ranges:
         print(f"[说明] 仅解析页码范围：{page_ranges}")
+    if save_json:
+        print("[说明] 已启用 JSON 旁证输出：将额外保存 content_list.json 与 layout.json")
 
     worst = 0  # 记录最严重的退出码；全部成功时保持 0
     for start in range(0, len(items), BATCH_SIZE):
         batch = items[start:start + BATCH_SIZE]
         try:
-            codes = process_batch(requests, token, batch, model, ocr, timeout, page_ranges)
+            codes = process_batch(requests, token, batch, model, ocr, timeout,
+                                  page_ranges, save_json)
         except ExtractError as e:
             print(f"[失败] {e.message}")
             codes = [e.code] * len(batch)
