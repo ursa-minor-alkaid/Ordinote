@@ -96,10 +96,10 @@ description: "通用笔记整理相关技能，包括：初始化并整理笔记
 
 请查阅 `references/ordinote-export.md`，其中详细定义了：
 
-- 两种导出脚本：`scripts/md2pdf.py`（PDF；版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致）与 `scripts/md2docx.py`（Word；python-docx 生成 .docx，还原标题等级、`<mark>` / span 文字高亮与背景色、图片插入、表格、列表、引用等；源笔记只读）
-- 前置条件（PDF 需用户自行安装 Markdown Preview Enhanced 扩展且本机有 Chrome/Edge；Word 需 `pip install python-docx markdown-it-py`，不需要扩展与浏览器）
-- 常用选项（通用：`--out`、`--skip-existing`、`--exclude`；PDF 专有：`--theme`、`--paper`、`--margin`、`--wait` 等）
-- 渲染情况与降级行为（PDF：公式在解析前抽取并由 KaTeX 渲染，支持 `array` 等多行环境；Word：公式以 Cambria Math 按原 LaTeX 文本呈现，不转 Word 公式对象；`tikz` 两种格式均不渲染；mermaid 仅 PDF 渲染；Word 中缺失图片插入红色提示并计数；未装依赖时报错退出）
+- 两种导出脚本：`scripts/md2pdf.py`（PDF；版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致）与 `scripts/md2docx.py`（Word；python-docx 生成 .docx，还原标题等级、`<mark>` / span 文字高亮与背景色、图片插入、表格、列表、引用等；公式转 Word 原生公式对象；源笔记只读）
+- 前置条件（PDF 需用户自行安装 Markdown Preview Enhanced 扩展且本机有 Chrome/Edge；Word 需 `pip install python-docx markdown-it-py`，公式另需 latex2mathml（首次运行自动安装）与本机 Office 的 `MML2OMML.XSL`，不需要扩展）
+- 常用选项（通用：`--out`、`--skip-existing`、`--exclude`；PDF 专有：`--theme`、`--paper`、`--margin`、`--wait` 等；Word 专有：`--omml-xsl`）
+- 渲染情况与降级行为（PDF：公式在解析前抽取并由 KaTeX 渲染，支持 `array` 等多行环境；Word：公式经 latex2mathml + MML2OMML.XSL 转为 OMML，多行环境按行拆分，转换失败时以 Cambria Math 按原 LaTeX 文本呈现并计数；`tikz` 两种格式均不渲染；mermaid 仅 PDF 渲染；Word 中缺失图片插入红色提示并计数；未装基础依赖时报错退出）
 - 失败处理要求（如实告知，不得声称已完成导出）
 
 ---

@@ -26,7 +26,7 @@
 | `scripts/extract_docx.py`   | 本地提取 Word（.docx）为 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 mark，霞鹜文楷正文不误伤；支持目录批量、去文件名版本号、指定输出目录与后缀；旧版 .doc 不支持，退出码 1 并提示另存为 .docx |
 | `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；默认只输出 Markdown，显式加 `--save-json` 时才额外保存 `content_list.json` 与 `layout.json`，不导出图片；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
 | `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式与 MPE 预览一致：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
-| `scripts/md2docx.py`       | 批量把 markdown 笔记导出为 Word（.docx）：python-docx 原生构建，还原 Heading 1-6 标题样式、加粗/斜体/删除线/下划线、`<mark>` 与 span 的任意背景色文字底纹、行内代码与代码块、引用、嵌套列表、表格、超链接与图片（本地/远程/data URI，按版心缩放）；公式以 Cambria Math 保留 LaTeX 原文；依赖 `python-docx`、`markdown-it-py`，源笔记只读 |
+| `scripts/md2docx.py`       | 批量把 markdown 笔记导出为 Word（.docx）：python-docx 原生构建，还原 Heading 1-6 标题样式、加粗/斜体/删除线/下划线、`<mark>` 与 span 的任意背景色文字底纹、行内代码与代码块、引用、嵌套列表、表格、超链接与图片（本地/远程/data URI，按版心缩放）；公式转成 Word 原生公式对象（OMML），转换失败时退回 LaTeX 原文；基础依赖 `python-docx`、`markdown-it-py`，公式的附加依赖见“导出 Word”；源笔记只读 |
 
 ## 使用
 
@@ -79,26 +79,28 @@ python scripts/md2pdf.py <文件或目录> [--out 输出目录] [--theme github-
 
 ### 导出 Word
 
-Word 导出不依赖 MPE 扩展与浏览器，仅需两个 Python 库（缺失时脚本会提示安装）：
+Word 导出不依赖 MPE 扩展，基础依赖为两个 Python 库（缺失时脚本会提示安装）：
 
 ```bash
 pip install python-docx markdown-it-py
 ```
 
+公式转换需要 `latex2mathml`（首次运行时脚本自动安装）和本机 Office 的 `MML2OMML.XSL`（自动查找，可用 `--omml-xsl` 指定）；缺少任一条件时公式退回 LaTeX 原文。
+
 使用方式：
 
 ```bash
-python scripts/md2docx.py <文件或目录> [--out 输出目录] [--skip-existing] [--exclude 正则]
+python scripts/md2docx.py <文件或目录> [--out 输出目录] [--skip-existing] [--exclude 正则] [--omml-xsl 路径]
 ```
 
 输出默认放在源文件同目录、与源文件同名的 .docx。还原效果：
 
 - 标题 `#` ~ `######` 对应 Word 内置 Heading 1-6 样式，可直接生成导航目录
 - `<mark>` 与 `<span style="background-color:...">` 按原色还原为文字底纹（淡粉、淡灰、黄色等均可），同时支持 span 字体颜色
-- 图片内嵌插入（相对路径、远程 URL、data URI；中文路径自动处理）；尊重 markdown 中 `<img width=...>` / `style="width:..."` 指定的尺寸（px/%/cm 等单位），未指定时按原生大小、超版心自动等比缩放
+- 图片内嵌插入（相对路径、远程 URL、data URI）；尊重 markdown 中 `<img width=...>` / `style="width:..."` 指定的尺寸（px/%/cm 等单位），未指定时按原生大小、超版心自动等比缩放；实际插入宽度取该尺寸的 85%
 - 加粗 / 斜体 / 删除线 / 下划线、行内代码与代码块、引用、嵌套有序无序列表、表格、超链接均按 Word 原生格式构建
-- 正文 10 号字、1.15 倍行距；页边距左右 2cm、上下 1cm
-- 公式以 Cambria Math 字体保留 LaTeX 原文（行内/块级），不转换为 Word 公式对象
+- 正文 8.5 号字、1.1 倍行距、段后 3pt，代码 8 号字；标题字号 13 ~ 9.5；页边距左右 1.8cm、上下 1cm；表格文字与正文同号
+- 公式转成 Word 原生公式对象（OMML），多行 `aligned` 环境按行拆分；无法转换时以 Cambria Math 保留 LaTeX 原文并在汇总中计数
 - mermaid 与 `tikz` 代码块保留为代码文本；缺失图片以红色提示文字占位并在汇总中计数
 
 完整说明见 `references/ordinote-export.md`。

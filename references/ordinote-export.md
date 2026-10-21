@@ -80,13 +80,15 @@ python scripts/md2pdf.py 第一章.md 第二章.md --theme vue --paper A3
 
 ### 前置条件（首次使用时向用户说明）
 
-1. 依赖两个 Python 库：**python-docx** 与 **markdown-it-py**。缺失时脚本直接报错并给出安装提示：
+1. 基础依赖两个 Python 库：**python-docx** 与 **markdown-it-py**。缺失时脚本直接报错并给出安装提示：
 
     ```bash
     pip install python-docx markdown-it-py
     ```
 
-2. 不需要 MPE 扩展、不需要浏览器；除远程图片加载外不需要联网。
+2. 公式转换需要 **latex2mathml**（首次运行时脚本自动 `pip install`）与本机 Office 附带的 **MML2OMML.XSL**（脚本自动查找 `Microsoft Office/root/Office*/`，也可用 `--omml-xsl` 指定）。缺少任一条件时公式退回 LaTeX 原文，不影响其余内容。
+
+3. 不需要 MPE 扩展；除远程图片加载与首次安装 latex2mathml 外不需要联网。
 
 ### 运行
 
@@ -103,6 +105,7 @@ python scripts/md2docx.py <文件或目录路径> [更多路径...]
 | `--out <目录>` | 输出目录，默认与源文件同目录 |
 | `--skip-existing` | 已有同名 .docx 时跳过 |
 | `--exclude <正则>` | 按路径正则排除文件 |
+| `--omml-xsl <路径>` | 指定 MML2OMML.XSL；默认自动查找本机 Office |
 
 示例：
 
@@ -115,9 +118,9 @@ python scripts/md2docx.py 第一章.md 第二章.md
 
 | markdown 内容 | Word 中的还原方式 |
 |---|---|
-| 标题 `#` ~ `######` | Word 内置 Heading 1-6 样式，字号递减、H1/H2 带下边框，可直接用于生成导航与目录 |
-| 正文、段落 | 10 号字，Calibri + 微软雅黑，1.15 倍行距 |
-| 纸张与页边距 | A4；左右 2cm，上下 1cm |
+| 标题 `#` ~ `######` | Word 内置 Heading 1-6 样式，字号 13 / 12 / 11 / 10.5 / 10 / 9.5，H1/H2 带下边框，可直接用于生成导航与目录 |
+| 正文、段落 | 8.5 号字，Calibri + 微软雅黑，1.1 倍行距，段后 3pt |
+| 纸张与页边距 | A4；左右 1.8cm，上下 1cm |
 | 加粗、斜体、粗斜、删除线、下划线 | 对应 Word 字符格式（`<u>` 标签同样识别） |
 | 行内代码 | Consolas 等宽字体 + 浅灰底纹 |
 | 代码块（围栏） | 整段浅灰底纹、边框与等宽字体，保留换行与缩进；语言标注不保留 |
@@ -126,15 +129,15 @@ python scripts/md2docx.py 第一章.md 第二章.md
 | 表格 | Word 原生表格（Table Grid 边框），首行表头加粗加底纹，单元格内保留行内格式 |
 | 分割线 `---` | 段落下边框横线 |
 | 链接 | Word 超链接，蓝色下划线，可点击跳转（页内锚点与非网址链接按普通文本处理） |
-| 图片 `![](...)` | 内嵌插入，相对路径按源文件所在目录解析（兼容中文文件名与百分号编码）；支持 http(s) 远程图片与 `data:` URI；未指定尺寸时按原生大小插入，宽度超过版心时自动等比缩放到版心宽度。**尊重 markdown 中指定的尺寸**：HTML 写法 `<img src=... width=400px height=...>` 的 `width` / `height` 属性，以及 `style="width:...;height:..."`（style 优先）均生效；支持 px（无单位数字按 px）、`%`（相对版心宽度）、pt、cm、mm、in、em 单位；只指定一边时另一边按原生比例自动推导；指定宽度超出版心或位于缩进列表内时，分别按版心/缩进后可用宽度等比缩小 |
+| 图片 `![](...)` | 内嵌插入，相对路径按源文件所在目录解析（兼容中文文件名与百分号编码）；支持 http(s) 远程图片与 `data:` URI。**尊重 markdown 中指定的尺寸**：HTML 写法 `<img src=... width=400px height=...>` 的 `width` / `height` 属性，以及 `style="width:...;height:..."`（style 优先）均生效；支持 px（无单位数字按 px）、`%`（相对版心宽度）、pt、cm、mm、in、em 单位；只指定一边时另一边按原生比例自动推导；指定宽度超出版心或位于缩进列表内时，分别按版心/缩进后可用宽度等比缩小。**实际插入宽度为该尺寸的 85%**（未指定尺寸时按原生大小、超版心缩放后再取 85%），用于减小图片占幅 |
 | `<mark>` 高亮 | 文字底纹（w:shd）：无样式属性时为黄色，`style="background-color: ..."` 时按指定颜色还原（如 lightpink 淡粉、`#e6e6e6` 淡灰） |
 | `<span style="background-color:...;color:...">` | 分别还原为文字底纹与字体颜色；支持命名色、`#rgb` / `#rrggbb` / `#rrggbbaa`、`rgb(...)` |
-| 公式 `$...$` / `$$...$$` | 在 markdown 解析前抽取，以 **Cambria Math 字体按原始 LaTeX 文本**呈现：行内公式保留在段落中，块级公式独占一段并居中。**不转换为 Word 公式对象** |
+| 公式 `$...$` / `$$...$$` | 在 markdown 解析前抽取，经 latex2mathml 转 MathML，再由 Office 的 MML2OMML.XSL 转成 **Word 原生公式对象**：行内公式嵌在段落中，块级公式独占段落并居中；`aligned` / `gather` 等多行环境按行拆分。转换失败（含 `\ce` 等 mhchem 命令）时退回 Cambria Math 按 LaTeX 原文呈现并计数 |
 | mermaid / tikz 等图表代码块 | **不渲染**，与普通代码块一样保留源码文本 |
 | YAML front-matter | 不写入文档 |
 | MPE 专有语法（admonition、`@import`、TOC 指令等） | 不识别，按普通文本处理 |
 
-关于公式：Word 原生公式对象（OMML）无法在不引入额外大型依赖（如 pandoc 或 LaTeX 转换链）的情况下从 LaTeX 可靠生成，脚本不做静默转换。LaTeX 原文以 Cambria Math 呈现保证可读与可复制；若需要真正的 Word 公式，在 Word 中手动粘贴 LaTeX（高版本 Word 的公式编辑器支持 LaTeX 输入）或使用 pandoc 另行转换。
+关于公式：转换链路为 latex2mathml → MathML → Office 的 MML2OMML.XSL → OMML。`\begin{aligned}` 等多行环境先按顶层 `\\` 拆行、去掉对齐符 `&`，每行生成一个居中公式段落；`\ce` / `\pu` 等 mhchem 命令、latex2mathml 不支持的宏，以及找不到 XSLT 或 latex2mathml 时，该公式退回 LaTeX 原文并在汇总中计数，不中断导出。
 
 图片相关降级：
 
@@ -155,9 +158,9 @@ python scripts/md2docx.py 第一章.md 第二章.md
 ## 四、失败处理（必须遵守）
 
 1. 脚本报错或某个文件导出失败时，**必须如实告知用户**，说明具体原因（未找到扩展、缺少 Python 库、渲染超时、输出为空、图片缺失等），不得声称已完成导出
-2. Word 导出若提示缺少 python-docx / markdown-it-py，告知安装命令 `pip install python-docx markdown-it-py`，由用户自行安装后重试，不要伪造导出结果
+2. Word 导出若提示缺少 python-docx / markdown-it-py，告知安装命令 `pip install python-docx markdown-it-py`，由用户自行安装后重试，不要伪造导出结果；latex2mathml 会自动安装，若安装失败或缺少 MML2OMML.XSL，公式退回 LaTeX 原文并在汇总中计数，需如实说明
 3. 笔记含 `tikz` 代码块时，**必须主动说明该图在导出物中未渲染**（保留为代码文本），并提供替代做法（mermaid 图仅 PDF 可渲染，Word 中同样只保留文本；需要图表入 Word 时先将图另存为图片再嵌入笔记）
-4. Word 导出后若提示有图片未嵌入，**必须告知具体是哪篇笔记、第几张**，并说明可能原因（相对路径变化、文件缺失、远程链接需联网）
+4. Word 导出后若提示有图片未嵌入或公式未转换，**必须告知具体是哪篇笔记、第几处**，并说明可能原因（相对路径变化、文件缺失、远程链接需联网；公式可能含 mhchem 命令或 latex2mathml 不支持的宏）
 5. 不得改用其它方式替代（例如改用其它工具的默认模板导出），也不得编造导出结果
 6. 单个文件失败不会中断整批，脚本会继续处理其余文件，最后统一汇总
 7. PDF 排查方向可提示用户：是否已安装 MPE 扩展、是否装有 Chrome、笔记是否引用了需要联网的远程图片、`--wait` 是否需要调大

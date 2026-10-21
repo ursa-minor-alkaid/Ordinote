@@ -10,15 +10,18 @@ Markdown 批量导出 Word 脚本（ordinote-export 功能 · Word 分册）
     链接，以及 <mark> / <span style="background-color:..."> 的文字高亮与背景色。
 
     公式（$...$ / $$...$$）在 markdown 解析之前抽取，避免 LaTeX 被
-    markdown 转义规则改写；Word 中以 Cambria Math 字体按原 LaTeX 文本呈现
-    （块级公式独占一段并居中）。mermaid / tikz 等图表代码块无法在 Word 中
-    渲染，保留为代码文本。
+    markdown 转义规则改写；随后经 latex2mathml 转成 MathML，再借用本机
+    Office 附带的 MML2OMML.XSL 转成 Word 原生公式对象（OMML）。
+    无法转换时退回 Cambria Math 字体按原 LaTeX 文本呈现，并在汇总中计数。
+    mermaid / tikz 等图表代码块无法在 Word 中渲染，保留为代码文本。
 
     源笔记只读，脚本不修改、不移动任何笔记文件。
 
 依赖：
     python-docx、markdown-it-py（缺失时提示 pip install）。
-    不需要 MPE 扩展、浏览器或网络（远程图片除外）。
+    公式转换需要 latex2mathml（缺失时首次运行自动安装）与 Office 的
+    MML2OMML.XSL（自动查找，可用 --omml-xsl 指定）。
+    不需要 MPE 扩展与网络（远程图片除外）。
 
 用法：
     python md2docx.py <文件或目录路径> [更多路径...] [选项]
@@ -27,6 +30,7 @@ Markdown 批量导出 Word 脚本（ordinote-export 功能 · Word 分册）
     --out DIR         输出目录（默认与源文件同目录）
     --skip-existing   已有同名 .docx 时跳过
     --exclude REGEX   按路径正则排除文件
+    --omml-xsl PATH   MML2OMML.XSL 路径（默认自动查找本机 Office）
 
 退出码：
     0  全部成功（含跳过）
@@ -37,14 +41,19 @@ Markdown 批量导出 Word 脚本（ordinote-export 功能 · Word 分册）
 import argparse
 import base64
 import html as html_lib
+import importlib
 import io
+import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
+
+from lxml import etree
 
 try:
     from markdown_it import MarkdownIt
@@ -91,7 +100,25 @@ COLOR_TABLE_HEADER_BG = "F0F3F6"
 COLOR_H_RULE = "D1D9E0"
 COLOR_MARK_DEFAULT = "FFFF00"
 
-HEADING_SIZES = (18, 15, 13, 12, 11.5, 11)
+# 排版尺寸（打印向：小字号、紧行距，减少页数）
+BODY_FONT_PT = 8.5
+CODE_FONT_PT = 8
+BODY_LINE_SPACING = 1.1
+BODY_SPACE_AFTER_PT = 3
+PAGE_MARGIN_X_CM = 1.8
+PAGE_MARGIN_Y_CM = 1.0
+HEADING_SIZES = (13, 12, 11, 10.5, 10, 9.5)
+
+# 图片显示尺寸按 markdown 指定宽度的 85% 插入
+IMAGE_SCALE = 0.85
+
+# 公式转换
+MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+MML2OMML_PATTERNS = (
+    "Microsoft Office/root/Office*/MML2OMML.XSL",
+    "Microsoft Office/Office*/MML2OMML.XSL",
+)
+MATH_XSL_OVERRIDE = None  # 命令行 --omml-xsl 指定的路径
 
 # CSS 命名颜色（笔记中常见的 lightpink / 灰度色等都可能出现在 style 属性里）
 CSS_COLORS = {
@@ -289,6 +316,223 @@ def md_to_html(md_text):
 
 
 # ------------------------------------------------------------
+# 公式转换：LaTeX → MathML → OMML
+# ------------------------------------------------------------
+
+_math_converter = None      # latex2mathml.converter 模块；False 表示不可用
+_math_xslt = None           # lxml XSLT 对象；False 表示不可用
+
+BARE_AMP_RE = re.compile(r"&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9A-Fa-f]+);)")
+UNSUPPORTED_MATH_RE = re.compile(
+    r"\\(?:ce|pu|chemfig|tikz)\b|\\begin\{tikzcd\}"
+)
+MULTILINE_MATH_RE = re.compile(
+    r"^\s*\\begin\{(aligned|align|alignat|gathered|gather|multline|split|eqnarray)\*?\}"
+    r"(?:\s*\{[^}]*\})?([\s\S]*)\\end\{\1\*?\}\s*$"
+)
+
+
+def _ensure_math_converter():
+    """导入 latex2mathml；首次缺失时自动安装一次。"""
+    global _math_converter
+    if _math_converter is not None:
+        return _math_converter or None
+
+    try:
+        _math_converter = importlib.import_module("latex2mathml.converter")
+        return _math_converter
+    except ImportError:
+        pass
+
+    print("[提示] 未检测到 latex2mathml，正在自动安装 ...")
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "latex2mathml"],
+            check=True, timeout=300,
+        )
+    except Exception as exc:
+        print(f"[警告] latex2mathml 自动安装失败：{exc}", file=sys.stderr)
+        _math_converter = False
+        return None
+
+    importlib.invalidate_caches()
+    try:
+        _math_converter = importlib.import_module("latex2mathml.converter")
+    except ImportError as exc:
+        print(f"[警告] latex2mathml 安装后仍无法导入：{exc}", file=sys.stderr)
+        _math_converter = False
+        return None
+    return _math_converter
+
+
+def _find_mml2omml():
+    """定位 Office 自带的 MML2OMML.XSL。"""
+    if MATH_XSL_OVERRIDE:
+        path = Path(MATH_XSL_OVERRIDE).expanduser()
+        return path if path.is_file() else None
+    for env in ("ProgramFiles", "ProgramFiles(x86)"):
+        root = os.environ.get(env)
+        if not root:
+            continue
+        for pattern in MML2OMML_PATTERNS:
+            hits = sorted(Path(root).glob(pattern))
+            for hit in reversed(hits):
+                if hit.is_file():
+                    return hit
+    return None
+
+
+def _get_math_xslt():
+    global _math_xslt
+    if _math_xslt is not None:
+        return _math_xslt or None
+    path = _find_mml2omml()
+    if path is None:
+        _math_xslt = False
+        return None
+    try:
+        _math_xslt = etree.XSLT(etree.parse(str(path)))
+    except Exception as exc:
+        print(f"[警告] 加载 {path} 失败：{exc}", file=sys.stderr)
+        _math_xslt = False
+        return None
+    return _math_xslt
+
+
+def _tex_to_omml(tex, display):
+    """单行 LaTeX 转 OMML 元素；失败返回 None。"""
+    xslt = _get_math_xslt()
+    if xslt is None:
+        return None
+    converter = _ensure_math_converter()
+    if converter is None:
+        return None
+    try:
+        mathml = converter.convert(tex, display="block" if display else "inline")
+        mathml = BARE_AMP_RE.sub("&amp;", mathml)
+        result = xslt(etree.fromstring(mathml.encode("utf-8")))
+        root = result.getroot()
+        if root is not None:
+            etree.cleanup_namespaces(root)
+    except Exception:
+        return None
+    return root
+
+
+def _split_tex_rows(body):
+    """按顶层 \\\\ 切分多行公式；花括号与环境内的不切。"""
+    rows, buf, brace, env, i = [], [], 0, 0, 0
+    while i < len(body):
+        if body.startswith("\\begin", i):
+            end = body.find("}", i)
+            if end != -1:
+                env += 1
+                buf.append(body[i:end + 1])
+                i = end + 1
+                continue
+        if body.startswith("\\end", i):
+            end = body.find("}", i)
+            if end != -1:
+                env = max(0, env - 1)
+                buf.append(body[i:end + 1])
+                i = end + 1
+                continue
+        if body.startswith("\\\\", i):
+            if brace == 0 and env == 0:
+                rows.append("".join(buf))
+                buf = []
+                i += 2
+                continue
+            buf.append("\\\\")
+            i += 2
+            continue
+        char = body[i]
+        if char == "\\" and i + 1 < len(body):
+            buf.append(body[i:i + 2])
+            i += 2
+            continue
+        if char == "{":
+            brace += 1
+        elif char == "}":
+            brace = max(0, brace - 1)
+        buf.append(char)
+        i += 1
+    rows.append("".join(buf))
+    return rows
+
+
+def _strip_align_markers(text):
+    """去掉顶层的对齐符 & 与行距参数 [2pt]，保留嵌套环境内的 &。"""
+    out, brace, env, i = [], 0, 0, 0
+    while i < len(text):
+        if text.startswith("\\begin", i):
+            end = text.find("}", i)
+            if end != -1:
+                env += 1
+                out.append(text[i:end + 1])
+                i = end + 1
+                continue
+        if text.startswith("\\end", i):
+            end = text.find("}", i)
+            if end != -1:
+                env = max(0, env - 1)
+                out.append(text[i:end + 1])
+                i = end + 1
+                continue
+        char = text[i]
+        if char == "\\" and i + 1 < len(text):
+            out.append(text[i:i + 2])
+            i += 2
+            continue
+        if char == "{":
+            brace += 1
+        elif char == "}":
+            brace = max(0, brace - 1)
+        if char == "&" and brace == 0 and env == 0:
+            i += 1
+            continue
+        out.append(char)
+        i += 1
+    return re.sub(r"^\s*\[[^\]]*\]", "", "".join(out)).strip()
+
+
+def tex_to_omml_rows(tex):
+    """把 LaTeX 转成若干 OMML 元素；多行环境返回多行，失败返回 None。"""
+    if UNSUPPORTED_MATH_RE.search(tex):
+        return None
+
+    match = MULTILINE_MATH_RE.match(tex)
+    if not match:
+        omml = _tex_to_omml(tex, display=False)
+        return [omml] if omml is not None else None
+
+    body = match.group(2)
+    rows = [
+        row for row in (_strip_align_markers(item) for item in _split_tex_rows(body))
+        if row
+    ]
+    if not rows:
+        return None
+    elements = []
+    for row in rows:
+        omml = _tex_to_omml(row, display=True)
+        if omml is None:
+            return None
+        elements.append(omml)
+    return elements
+
+
+def wrap_display_math(omml):
+    """把 m:oMath 包进 m:oMathPara 并居中。"""
+    para = etree.Element(qn("m:oMathPara"), nsmap={"m": MATH_NS})
+    props = etree.SubElement(para, qn("m:oMathParaPr"))
+    jc = etree.SubElement(props, qn("m:jc"))
+    jc.set(qn("m:val"), "center")
+    para.append(omml)
+    return para
+
+
+# ------------------------------------------------------------
 # docx 低层工具
 # ------------------------------------------------------------
 
@@ -408,23 +652,24 @@ def setup_numbering(document):
 
 def configure_styles(document):
     """统一文档样式，使其接近 GitHub / MPE 浅色预览。"""
-    # A4 纸张；页边距左右 2cm，上下 1cm
+    # A4 纸张；页边距左右 1.8cm，上下 1cm
     for section in document.sections:
         section.page_width = Cm(21)
         section.page_height = Cm(29.7)
-        section.left_margin = Cm(2)
-        section.right_margin = Cm(2)
-        section.top_margin = Cm(1)
-        section.bottom_margin = Cm(1)
+        section.left_margin = Cm(PAGE_MARGIN_X_CM)
+        section.right_margin = Cm(PAGE_MARGIN_X_CM)
+        section.top_margin = Cm(PAGE_MARGIN_Y_CM)
+        section.bottom_margin = Cm(PAGE_MARGIN_Y_CM)
 
     normal = document.styles["Normal"]
     normal.font.name = FONT_ASCII
-    normal.font.size = Pt(10)
+    normal.font.size = Pt(BODY_FONT_PT)
     normal.font.color.rgb = RGBColor.from_string(COLOR_TEXT)
     normal.element.rPr.rFonts.set(qn("w:eastAsia"), FONT_EAST_ASIA)
     pf = normal.paragraph_format
-    pf.line_spacing = 1.15
-    pf.space_after = Pt(6)
+    pf.line_spacing = BODY_LINE_SPACING
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(BODY_SPACE_AFTER_PT)
 
     for i in range(1, 7):
         style = document.styles[f"Heading {i}"]
@@ -434,8 +679,8 @@ def configure_styles(document):
         style.font.italic = False
         style.font.color.rgb = RGBColor.from_string(COLOR_TEXT)
         style.element.rPr.rFonts.set(qn("w:eastAsia"), FONT_EAST_ASIA)
-        style.paragraph_format.space_before = Pt(14 if i <= 2 else 10)
-        style.paragraph_format.space_after = Pt(6 if i <= 2 else 4)
+        style.paragraph_format.space_before = Pt(10 if i <= 2 else 6)
+        style.paragraph_format.space_after = Pt(4)
         style.paragraph_format.keep_with_next = True
         if i in (1, 2):
             ppr = style.element.get_or_add_pPr()
@@ -490,6 +735,8 @@ class MarkdownDocxBuilder(HTMLParser):
         self.in_pre = False
         self.pre_lines = []
         self.math_display = False
+        self.in_math_span = False
+        self._cell_para_reused = False
         self.usable_width = self._usable_width()
 
     def _usable_width(self):
@@ -512,7 +759,7 @@ class MarkdownDocxBuilder(HTMLParser):
             f'<w:pPr {nsdecls("w")}>'
             f'<w:pBdr>{borders}</w:pBdr>'
             f'<w:shd w:val="clear" w:color="auto" w:fill="{COLOR_CODE_BLOCK_BG}"/>'
-            f'<w:spacing w:before="80" w:after="160" w:line="276" w:lineRule="auto"/>'
+            f'<w:spacing w:before="40" w:after="80" w:line="240" w:lineRule="auto"/>'
             f'<w:ind w:left="120"/>'
             f'</w:pPr>'
         )
@@ -522,9 +769,16 @@ class MarkdownDocxBuilder(HTMLParser):
         para._p.insert(0, parse_xml(ppr_xml))
         self.para = para
 
+    def _new_cell_paragraph(self):
+        """复用单元格自带的第一个空段落，避免每个单元格多出一行空段。"""
+        if not self._cell_para_reused:
+            self._cell_para_reused = True
+            return self.cell.paragraphs[0]
+        return self.cell.add_paragraph()
+
     def _new_raw_paragraph(self):
         if self.mode == "cell":
-            return self.cell.add_paragraph()
+            return self._new_cell_paragraph()
         return self.doc.add_paragraph()
 
     def ensure_paragraph(self):
@@ -532,8 +786,8 @@ class MarkdownDocxBuilder(HTMLParser):
             return self.para
 
         if self.mode == "cell":
-            para = self.cell.add_paragraph()
-            para.paragraph_format.space_after = Pt(2)
+            para = self._new_cell_paragraph()
+            para.paragraph_format.space_after = Pt(BODY_SPACE_AFTER_PT)
             self.para = para
             return para
 
@@ -598,6 +852,9 @@ class MarkdownDocxBuilder(HTMLParser):
     def emit_text(self, text):
         if not text:
             return
+        if self.in_math_span:
+            # 公式已转成 OMML，span 里的 LaTeX 原文不再写入
+            return
         if self.in_pre:
             self.pre_lines.append(text)
             return
@@ -615,7 +872,7 @@ class MarkdownDocxBuilder(HTMLParser):
             return
         if fmt["code"]:
             _set_rfonts(run, FONT_MONO, FONT_EAST_ASIA)
-            run.font.size = Pt(9.5)
+            run.font.size = Pt(CODE_FONT_PT)
         else:
             _set_rfonts(run)
         run.font.bold = bool(fmt["b"])
@@ -679,13 +936,13 @@ class MarkdownDocxBuilder(HTMLParser):
                 scale = 1.0
                 if want_w is not None and want_w > available:
                     scale = available / want_w
-                kwargs["width"] = Emu(int((want_w if want_w is not None
-                                          else native_width * want_h / native_height)
-                                         * scale))
+                width = (want_w if want_w is not None
+                         else native_width * want_h / native_height) * scale
+                kwargs["width"] = Emu(int(width * IMAGE_SCALE))
                 if want_h is not None:
-                    kwargs["height"] = Emu(int(want_h * scale))
+                    kwargs["height"] = Emu(int(want_h * scale * IMAGE_SCALE))
             else:
-                kwargs["width"] = Emu(min(native_width, available))
+                kwargs["width"] = Emu(int(min(native_width, available) * IMAGE_SCALE))
             run.add_picture(io.BytesIO(blob), **kwargs)
         except Exception as exc:
             run.text = f"[图片无法识别：{src}]"
@@ -807,10 +1064,37 @@ class MarkdownDocxBuilder(HTMLParser):
         fill, color = style_attrs(attr.get("style", ""))
         self.push_format(fill=fill or COLOR_MARK_DEFAULT, color=color)
 
+    def _emit_math(self, tex, display):
+        """把 LaTeX 写成 Word 公式对象；失败返回 False 由调用方降级。"""
+        rows = tex_to_omml_rows(tex)
+        if rows is None:
+            self.warnings.append(f"公式未转换（保留 LaTeX 原文）：{tex[:40]}")
+            return False
+
+        if display:
+            self.finalize_paragraph()
+            for index, omml in enumerate(rows):
+                para = self.ensure_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                para.paragraph_format.space_after = Pt(0)
+                para._p.append(wrap_display_math(omml))
+                if index < len(rows) - 1:
+                    self.finalize_paragraph()
+            self.finalize_paragraph()
+        else:
+            para = self.ensure_paragraph()
+            para._p.append(rows[0])
+        return True
+
     def _start_span(self, attr):
         classes = attr.get("class", "").split()
         if "math" in classes:
+            tex = html_lib.unescape(attr.get("data-tex") or "")
             display = "math-display" in classes
+            if tex and self._emit_math(tex, display):
+                self.in_math_span = True
+                return
+            # 降级：以 Cambria Math 按 LaTeX 原文呈现
             self.math_display = display
             if display:
                 self.finalize_paragraph()
@@ -852,7 +1136,7 @@ class MarkdownDocxBuilder(HTMLParser):
                 self.para.add_run().add_break()
             run = self.para.add_run(line)
             _set_rfonts(run, FONT_MONO, FONT_EAST_ASIA)
-            run.font.size = Pt(9.5)
+            run.font.size = Pt(CODE_FONT_PT)
         self.in_pre = False
         self.finalize_paragraph()
 
@@ -868,6 +1152,9 @@ class MarkdownDocxBuilder(HTMLParser):
         self.finalize_paragraph()
 
     def _end_span(self):
+        if self.in_math_span:
+            self.in_math_span = False
+            return
         if self.fmt.get("math"):
             display = self.math_display
             self.pop_format()
@@ -1078,11 +1365,15 @@ def parse_args(argv):
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")
     parser.add_argument("--skip-existing", action="store_true", help="已有同名 .docx 时跳过")
     parser.add_argument("--exclude", help="按路径正则排除文件")
+    parser.add_argument("--omml-xsl", help="MML2OMML.XSL 路径（默认自动查找本机 Office）")
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     opts = parse_args(argv)
+
+    global MATH_XSL_OVERRIDE
+    MATH_XSL_OVERRIDE = opts.omml_xsl
 
     try:
         targets = collect_targets(opts.paths, re.compile(opts.exclude) if opts.exclude else None)
@@ -1109,7 +1400,12 @@ def main(argv=None):
                 size = docx_path.stat().st_size
                 message = f"{docx_path}（{size / 1024:.0f} KB）"
                 if warnings:
-                    message += f"；{len(warnings)} 张图片未嵌入"
+                    images = sum(1 for item in warnings if item.startswith("图片"))
+                    formulas = sum(1 for item in warnings if item.startswith("公式"))
+                    if images:
+                        message += f"；{images} 张图片未嵌入"
+                    if formulas:
+                        message += f"；{formulas} 处公式未转换"
                 status = "ok"
             except Exception as exc:  # 单个文件失败不中断整批
                 status, message = "fail", f"{type(exc).__name__}: {exc}"
