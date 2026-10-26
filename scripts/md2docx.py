@@ -108,6 +108,8 @@ BODY_SPACE_AFTER_PT = 3
 PAGE_MARGIN_X_CM = 1.8
 PAGE_MARGIN_Y_CM = 1.0
 HEADING_SIZES = (13, 12, 11, 10.5, 10, 9.5)
+# 全文第一个一级标题（文件标题）单独加大并居中
+TITLE_FONT_PT = 18
 
 # 图片显示尺寸按 markdown 指定宽度的 85% 插入
 IMAGE_SCALE = 0.85
@@ -737,6 +739,8 @@ class MarkdownDocxBuilder(HTMLParser):
         self.math_display = False
         self.in_math_span = False
         self._cell_para_reused = False
+        self._title_done = header_cell
+        self.is_title_para = False
         self.usable_width = self._usable_width()
 
     def _usable_width(self):
@@ -747,6 +751,7 @@ class MarkdownDocxBuilder(HTMLParser):
 
     def finalize_paragraph(self):
         self.para = None
+        self.is_title_para = False
 
     def begin_code_paragraph(self):
         para = self._new_raw_paragraph()
@@ -894,6 +899,10 @@ class MarkdownDocxBuilder(HTMLParser):
         if fmt["link"]:
             run.font.underline = True
             add_hyperlink(para, fmt["link"], run)
+        if self.is_title_para and para is self.para:
+            # 覆盖 Heading 1 的常规字号，文件标题固定 18 号加粗
+            run.font.size = Pt(TITLE_FONT_PT)
+            run.font.bold = True
 
     def emit_image(self, src, alt, width_attr=None, height_attr=None, style_text=None):
         if not src:
@@ -995,6 +1004,11 @@ class MarkdownDocxBuilder(HTMLParser):
             self.para = self.cell.add_paragraph()
         else:
             self.para = self.doc.add_paragraph(style=f"Heading {level}")
+            # 全文第一个一级标题作为文件标题：居中、18 号、加粗
+            if level == 1 and not self._title_done:
+                self._title_done = True
+                self.is_title_para = True
+                self.para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     def _start_p(self, attr):
         self.finalize_paragraph()
