@@ -1,6 +1,6 @@
 ---
 name: "ordinote-organizer"
-description: "通用笔记整理相关技能，包括：初始化并整理笔记（OCR结果）、向已有笔记中增添内容、联网搜索补充完善笔记中的略写部分、将笔记规范化整理、提取PDF/PPT/Word/图片内容并整理成文、将笔记批量导出为 PDF 或 Word 等；用户说有关笔记整理时，使用该技能"
+description: "通用笔记整理相关技能，包括：初始化并整理笔记（OCR结果）、向已有笔记中增添内容、联网搜索补充完善笔记中的略写部分、将笔记规范化整理、提取PDF/PPT/Word/图片/HTML内容并整理成文、将笔记批量导出为 PDF 或 Word 等；用户说有关笔记整理时，使用该技能"
 ---
 
 # 通用笔记整理助手
@@ -16,7 +16,7 @@ description: "通用笔记整理相关技能，包括：初始化并整理笔记
 - 要求将笔记规范化整理 / 生成整理版
 - 要求向已有笔记中添加新的内容
 - 要求补充完善笔记（补全笔记中略写、缩写的部分）
-- 要求将 PDF/PPT/Word/图片 的内容提取或整理出来（形成整理文档）
+- 要求将 PDF/PPT/Word/图片/HTML 的内容提取或整理出来（形成整理文档）
 - 要求把笔记导出为 PDF 或 Word（单个文件或整个目录批量导出）；只说"导出笔记"未指定格式时，先询问需要 PDF、Word 还是两者都要
 
 ---
@@ -74,15 +74,16 @@ description: "通用笔记整理相关技能，包括：初始化并整理笔记
 - 格式确定规则（有以往整理好的笔记则参考其格式；没有或用户没说，则按笔记逻辑内容自行组织）
 - 通用模板、分类标准与分层要求、板块合并规则与内容处理约束（不得删改已有内容，仅调整顺序和逻辑）
 
-### 5. PDF/PPT/Word/图片 内容提取（extract）
+### 5. PDF/PPT/Word/图片/HTML 内容提取（extract）
 
-适用于：用户要求将 PDF/PPT/Word/图片 的内容提取、整理出来（如"把这个 PPT 整理成文档""提取这个 PDF 的内容""把这张图片里的文字提取出来""把 Word 笔记转成 markdown"）。
+适用于：用户要求将 PDF/PPT/Word/图片/HTML 的内容提取、整理出来（如"把这个 PPT 整理成文档""提取这个 PDF 的内容""把这张图片里的文字提取出来""把 Word 笔记转成 markdown""把这个 HTML 幻灯片提取成笔记"）。
 
 请查阅 `references/ordinote-extract.md`，其中详细定义了：
 
 - 提取脚本调用（先本地脚本，失败或效果差时改用 MinerU API）；整理环节交由 `ordinote-wash` 完成
-- 提取脚本说明（`scripts/` 下的本地 PDF/PPT 脚本、本地 Word 脚本与 MinerU API 三种方式；均已实现）
+- 提取脚本说明（`scripts/` 下的本地 PDF/PPT 脚本、本地 Word 脚本、本地 HTML 脚本与 MinerU API 四种方式；均已实现）
 - Word 本地提取（`extract_docx.py`：`.docx` 转 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 `<mark>`，霞鹜文楷正文不误伤；支持目录批量、`--strip-version` 去版本号、`--out` 指定输出目录）
+- HTML 本地提取（`extract_html.py`：自包含 HTML 幻灯片逐页提取为 markdown，`class` 含独立单词 `slide` 的 `section` / `div` / `article` 视为一页，页间以 `---` 分隔；找不到幻灯片容器时按整页提取；只依赖标准库）
 - MinerU 支持的输入类型（PDF/PPT/DOC 及图片 png/jpg/jpeg/jp2/webp/gif/bmp；可直接上传图片做 OCR 提取文字）
 - MinerU 支持一次上传多个文件批量提取（PDF 与图片可混用，每批 ≤ 50 个、官方单批上限 200 个，各文件分别输出）
 - MinerU Token 配置（用 PowerShell 把 Token 写入用户环境变量 `MINERU_API_TOKEN`；脚本不读磁盘 Token 文件，未配置时会给出配置指引）

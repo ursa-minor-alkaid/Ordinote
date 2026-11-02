@@ -1,16 +1,17 @@
-# PDF/PPT/Word/图片 内容提取
+# PDF/PPT/Word/图片/HTML 内容提取
 
 ## 功能定义
 
-将 PDF/PPT/Word/图片 文件中的文字内容提取出来，生成提取稿（中间文档）。本功能**只负责提取**：提取稿**不是最终笔记**，后续通过 `ordinote-wash`（初始化整理，含修错别字、去噪、公式转写等整理规则）或 `ordinote-add`（添加内容）功能将其转化为笔记。Word（.docx）由 `extract_docx.py` 本地转换并保留格式，输出可直接作为正式笔记。MinerU 云端提取默认只接收 Markdown；JSON 版式信息为可选项，仅在用户显式要求时接收。
+将 PDF/PPT/Word/图片/HTML 文件中的文字内容提取出来，生成提取稿（中间文档）。本功能**只负责提取**：提取稿**不是最终笔记**，后续通过 `ordinote-wash`（初始化整理，含修错别字、去噪、公式转写等整理规则）或 `ordinote-add`（添加内容）功能将其转化为笔记。Word（.docx）由 `extract_docx.py` 本地转换并保留格式，输出可直接作为正式笔记；自包含 HTML 幻灯片由 `extract_html.py` 逐页提取。MinerU 云端提取默认只接收 Markdown；JSON 版式信息为可选项，仅在用户显式要求时接收。
 
 ---
 
 ## 调用脚本提取（文字提取）
 
-1. **选择提取方式**：`scripts/` 目录下提供三种提取脚本：
+1. **选择提取方式**：`scripts/` 目录下提供四种提取脚本：
    - `scripts/extract_pdf_pptx.py`：本地 Python 脚本直接提取（适用于**文字版** PDF/PPT；详见下文「PDF/PPT 提取」一节；已实现）
    - `scripts/extract_docx.py`：本地 Python 脚本把 **Word（.docx）** 转换为 markdown（保留格式信息；详见下文「Word 提取」一节；已实现）
+   - `scripts/extract_html.py`：本地 Python 脚本逐页提取**自包含 HTML 幻灯片**的文字（详见下文「HTML 提取」一节；已实现）
    - `scripts/mineru_api.py`：调用 MinerU 精准解析 API 提取（适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及**图片**，且支持**一次上传多个文件批量提取**；已实现，需先配置 Token；默认仅输出 Markdown，JSON 需显式开启）
    - 默认先尝试本地脚本；失败或效果差时再改用 MinerU API（旧版 `.doc` 本地脚本不支持：请先用 Word 另存为 `.docx`，或改用 MinerU API）
 2. **运行脚本提取文字**，生成提取文件：
@@ -102,6 +103,38 @@ python scripts/extract_docx.py "archives\纵向笔记（临时）" --strip-versi
 | `--no-auto-install` | 缺少 python-docx 时不自动安装 |
 
 退出码：`0` 全部成功；`1` 用法错误 / 不支持的类型（含旧版 `.doc`）；`2` 转换失败或结果为空；`3` 缺少依赖 python-docx，且自动安装被拒绝或失败
+
+---
+
+## HTML 提取（本地 · scripts/extract_html.py）
+
+从自包含 HTML 幻灯片中逐页提取文字，生成 markdown 提取稿。适用于 HTML 导出的演示文稿（每页由独立容器包裹）；脚本只读源文件，只依赖标准库。
+
+### 运行
+
+```bash
+python scripts/extract_html.py <文件路径> [更多文件路径...] [选项]
+```
+
+- 可一次传入多个 `.html` / `.htm` 文件逐个提取；单个文件失败只记录错误，不中断其他文件
+
+### 识别规则与输出内容
+
+- 容器：`class` 中含有独立单词 `slide` 的 `section` / `div` / `article` 视为一张幻灯片
+- 忽略内容：`style` / `script` / `noscript` / `template` 中的内容不提取
+- 文本结构：块级元素换行；表格单元格以 ` | ` 分隔；图片记为 `[IMG]` 或 `[IMG:alt]`
+- 找不到幻灯片容器时，退化为整份 `body` 作为单页输出（适合单篇 HTML 报告）
+- 输出到源文件同目录，命名为 `{原文件名}-提取.md`；各张幻灯片之间以 `---` 分隔线分开（保留源结构线索，整理时保留）
+- 无文字幻灯片以 HTML 注释占位；文件头以 HTML 注释记录来源、页数与提取时间
+- 提取完成后打印页数与字符数统计，供核对提取质量
+
+### 常用选项
+
+| 选项 | 说明 |
+|---|---|
+| `--no-images` | 图片只记 `[IMG]`，不记 `alt` 文本 |
+
+退出码：`0` 全部成功；`1` 用法错误 / 文件不存在 / 不支持的类型（仅支持 `.html` / `.htm`）；`2` 提取失败或结果为空
 
 ---
 
