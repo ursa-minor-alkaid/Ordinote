@@ -16,7 +16,7 @@
 | 3 | 规范化整理   | 将笔记重组为结构清晰的标准化笔记（`{原文件名}-标准化.md`）：有以往整理笔记则参考其格式，否则按笔记逻辑自行组织；仅调序不改内容，疑点用 `<mark>` 标注 | `references/ordinote-standardize.md`    |
 | 4 | 添加内容    | 将新笔记（子笔记）按内容归入已有的整理笔记（母笔记），格式向母笔记看齐；分无损add（全部归入，母/子内容零删改）与去重add（先比对母笔记已有内容、剔除重复部分，生成合并计划经用户确认后再加入）两种模式，未指定模式时先询问用户 | `references/ordinote-add.md`          |
 | 5 | 补充完善    | 识别笔记中缩写、略写、乱码公式等略写部分，联网搜索补全；新增内容用淡粉色 `<mark>` 高亮，原公式旁追加 LaTeX 转写  | `references/ordinote-enrich.md`       |
-| 6 | 导出 PDF / Word | 把单个笔记或整个目录批量导出为 PDF 或 Word：PDF 版式复用本机 MPE 扩展自带的样式与 mermaid 资源，观感与 MPE 预览一致；Word 由 python-docx 生成，忠实还原标题等级、文字高亮与背景色、图片、表格、列表等；源笔记只读 | `references/ordinote-export.md`       |
+| 6 | 导出 PDF / Word | 把单个笔记或整个目录批量导出为 PDF 或 Word：PDF 版式复用本机 MPE 扩展自带的样式与 mermaid 资源，字号、行距与标题规格对齐 Word 导出，代码块自动换行并使用浅灰底；Word 由 python-docx 生成，忠实还原标题等级、文字高亮与背景色、图片、表格、列表等；源笔记只读 | `references/ordinote-export.md`       |
 
 ## 脚本
 
@@ -26,7 +26,7 @@
 | `scripts/extract_docx.py`   | 本地提取 Word（.docx）为 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 mark，霞鹜文楷正文不误伤；支持目录批量、去文件名版本号、指定输出目录与后缀；旧版 .doc 不支持，退出码 1 并提示另存为 .docx |
 | `scripts/extract_html.py`   | 本地提取自包含 HTML 幻灯片的逐页文字，生成 `{原文件名}-提取.md`；`class` 含独立单词 `slide` 的 `section` / `div` / `article` 视为一页，页间以 `---` 分隔；表格单元格以 ` \| ` 分隔，图片记 `[IMG]` 或 `[IMG:alt]`；找不到幻灯片容器时按整页提取；只依赖标准库 |
 | `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；默认只输出 Markdown，显式加 `--save-json` 时才额外保存 `content_list.json` 与 `layout.json`，不导出图片；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
-| `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式与 MPE 预览一致：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
+| `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式复用本机 MPE 扩展样式：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；字号、行距与标题规格对齐 Word 导出，代码块自动换行并使用浅灰底；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
 | `scripts/md2docx.py`       | 批量把 markdown 笔记导出为 Word（.docx）：python-docx 原生构建，还原 Heading 1-6 标题样式、加粗/斜体/删除线/下划线、`<mark>` 与 span 的任意背景色文字底纹、行内代码与代码块、引用、嵌套列表、表格、超链接与图片（本地/远程/data URI，按版心缩放）；公式转成 Word 原生公式对象（OMML），转换失败时退回 LaTeX 原文；基础依赖 `python-docx`、`markdown-it-py`，公式的附加依赖见“导出 Word”；源笔记只读 |
 
 ## 使用

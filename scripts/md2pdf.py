@@ -5,10 +5,10 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
 
 功能：
     把 markdown 笔记批量导出为 PDF，版式复用本机 Markdown Preview Enhanced
-    （MPE）扩展自带的样式与图表资源，观感与 MPE 预览一致。
-    不需要下载任何东西：解析用已安装的 markdown-it-py，主题样式与 mermaid
-    取自 MPE 扩展目录，公式渲染引擎取自本机已装的其它扩展，打印用本机
-    Chrome / Edge 的无头模式。
+    （MPE）扩展自带的样式与图表资源；字号、行距与标题规格对齐 Word 导出，
+    代码块自动换行并使用浅灰底。不需要下载任何东西：解析用已安装的
+    markdown-it-py，主题样式与 mermaid 取自 MPE 扩展目录，公式渲染引擎取自
+    本机已装的其它扩展，打印用本机 Chrome / Edge 的无头模式。
 
     公式（$...$ / $$...$$）在 markdown 解析之前抽取，交页面里的 KaTeX 渲染，
     因此 LaTeX 内容不会被 markdown 的转义、强调与段落规则改写。
@@ -112,16 +112,69 @@ DEFAULT_WAIT_MS = 3000
 
 # 追加在 MPE 样式之后的打印规则。MPE 自身不写 @page（页边距由它传给
 # puppeteer 的参数控制），纸张与边距需要在导出的 HTML 里补齐。
+# 字号、行距与标题规格对齐 md2docx.py，保证 PDF 与 Word 的版面尺寸一致。
 PRINT_CSS_TEMPLATE = """
 @page {{ size: {paper}; margin: {margin}; }}
 html, body {{ background: #fff !important; }}
 html body {{
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+  font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-size: 8.5pt;
+  line-height: 1.1;
+  color: #1F2328;
 }}
-.markdown-preview {{ height: auto !important; padding: 0 !important; }}
-h1, h2, h3, h4, h5, h6 {{ break-after: avoid; page-break-after: avoid; }}
-table, pre, blockquote, img, .mermaid {{
+html body[for="html-export"] {{ height: auto !important; overflow: visible !important; }}
+.markdown-preview {{ height: auto !important; min-height: 0 !important; padding: 0 !important; }}
+.markdown-preview h1, .markdown-preview h2, .markdown-preview h3,
+.markdown-preview h4, .markdown-preview h5, .markdown-preview h6 {{
+  font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-weight: 700;
+  color: #1F2328;
+  line-height: 1.1;
+  break-after: avoid;
+  page-break-after: avoid;
+}}
+.markdown-preview h1 {{
+  font-size: 13pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  border-bottom: 1.5pt solid #D1D9E0;
+}}
+.markdown-preview h2 {{
+  font-size: 12pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  border-bottom: 0.75pt solid #D1D9E0;
+}}
+.markdown-preview h3 {{ font-size: 11pt; margin: 6pt 0 4pt; }}
+.markdown-preview h4 {{ font-size: 10.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h5 {{ font-size: 10pt; margin: 6pt 0 4pt; }}
+.markdown-preview h6 {{ font-size: 9.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h1.doc-title {{ font-size: 18pt; text-align: center; }}
+.markdown-preview p {{ margin: 0 0 3pt; }}
+.markdown-preview code {{ font-family: Consolas, "Courier New", monospace; font-size: 8pt; }}
+.markdown-preview pre {{
+  background-color: #F6F8FA !important;
+  border: 0.5pt solid #E5E9ED;
+  border-radius: 3pt;
+  padding: 4pt 6pt !important;
+  overflow: visible !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.2;
+  font-size: 8pt;
+  break-inside: auto;
+  page-break-inside: auto;
+}}
+.markdown-preview pre code {{
+  display: block;
+  background: transparent !important;
+  padding: 0 !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.2;
+  font-size: 8pt;
+}}
+table, blockquote, img, .mermaid {{
   break-inside: avoid;
   page-break-inside: avoid;
 }}
@@ -365,6 +418,19 @@ def _title_of(body, fallback):
     return fallback
 
 
+def mark_doc_title(body):
+    """给正文第一个一级标题加 doc-title 类，使其按 Word 的文件标题样式呈现。"""
+    def replace(match):
+        attrs = match.group(1)
+        if re.search(r"""class\s*=\s*["']""", attrs):
+            attrs = re.sub(r"""class\s*=\s*(["'])""", r"class=\1doc-title ", attrs, count=1)
+        else:
+            attrs += ' class="doc-title"'
+        return f"<h1{attrs}>"
+
+    return re.sub(r"<h1([^>]*)>", replace, body, count=1)
+
+
 def build_html(body, styles, base_dir, title, browser_assets, paper, margin):
     """组装完整页面：MPE 骨架 + 内联样式 + 本地脚本。"""
     css_parts = list(styles)
@@ -408,6 +474,7 @@ def render_pdf(html_text, pdf_path, browser, wait_ms):
     with tempfile.TemporaryDirectory(prefix="ordinote-pdf-") as tmp:
         tmp_dir = Path(tmp)
         html_path = tmp_dir / "page.html"
+        tmp_pdf = tmp_dir / "output.pdf"
         html_path.write_text(html_text, encoding="utf-8")
 
         common = [
@@ -417,27 +484,29 @@ def render_pdf(html_text, pdf_path, browser, wait_ms):
             "--no-default-browser-check",
             f"--virtual-time-budget={wait_ms}",
             f"--user-data-dir={tmp_dir / 'profile'}",
-            f"--print-to-pdf={pdf_path}",
+            f"--print-to-pdf={tmp_pdf}",
             html_path.as_uri(),
         ]
         timeout = wait_ms / 1000 + 90 if wait_ms else 120
         errors = []
         for mode in ("--headless=new", "--headless"):
-            if pdf_path.exists():
+            if tmp_pdf.exists():
                 break
             result = subprocess.run(
                 [str(browser), mode, *common],
                 capture_output=True, text=True, errors="replace", timeout=timeout,
             )
-            if not pdf_path.exists():
+            if not tmp_pdf.exists():
                 errors.append(f"{mode}：退出码 {result.returncode}，{_browser_error(result)}")
 
-        if not pdf_path.exists():
+        if not tmp_pdf.exists():
             raise RuntimeError("浏览器未生成 PDF（" + "；".join(errors) + "）")
 
-        size = pdf_path.stat().st_size
+        size = tmp_pdf.stat().st_size
         if size == 0:
             raise RuntimeError("生成的 PDF 为空文件")
+        # 先写到临时文件再替换目标，保证同名 PDF 被覆盖，且失败时不破坏旧文件
+        shutil.move(str(tmp_pdf), str(pdf_path))
     return size
 
 
@@ -478,6 +547,7 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
 
     out_dir.mkdir(parents=True, exist_ok=True)
     body = md_to_html_body(strip_front_matter(read_text(md_path)))
+    body = mark_doc_title(body)
     page = build_html(
         body=body,
         styles=styles,
@@ -494,7 +564,8 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        description="把 markdown 批量导出为 PDF，版式对齐 Markdown Preview Enhanced 预览",
+        description="把 markdown 批量导出为 PDF，套用 Markdown Preview Enhanced 主题，"
+                    "字号、行距与标题规格对齐 Word 导出",
     )
     parser.add_argument("paths", nargs="+", help="markdown 文件或目录，可多个")
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")
