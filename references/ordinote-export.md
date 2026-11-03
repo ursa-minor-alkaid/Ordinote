@@ -4,7 +4,7 @@
 
 把 markdown 笔记导出为 PDF 或 Word（.docx），支持单个文件，也支持整个目录批量导出。两种格式使用不同脚本与渲染方案：
 
-- **PDF**（`scripts/md2pdf.py`）：版式复用本机 Markdown Preview Enhanced（MPE）扩展自带的样式与图表资源，字号、行距与标题规格对齐 Word 导出；代码块自动换行、使用浅灰底，不出现横向滚动条。
+- **PDF**（`scripts/md2pdf.py`）：版式复用本机 Markdown Preview Enhanced（MPE）扩展自带的样式与图表资源，字号与标题规格对齐 Word 导出，行距不小于 1.2 倍；代码块自动换行、使用浅灰底，不出现横向滚动条。
 - **Word**（`scripts/md2docx.py`）：用 python-docx 直接生成 .docx，尽量忠实还原 markdown 原始效果，包括标题等级、文字高亮与背景色、图片插入、表格、列表等。Word 导出不依赖 MPE 扩展与浏览器。
 
 本功能**只负责导出**：源笔记只读，导出过程不修改、不移动、不重命名任何笔记文件。导出物属于对外输出物，不参与 `ordinote-wash` / `ordinote-standardize` 等整理链路。
@@ -58,7 +58,7 @@ python scripts/md2pdf.py 第一章.md 第二章.md --theme vue --paper A3
 | 内容 | 处理方式 |
 |---|---|
 | 标题、段落、列表、表格、引用 | 由 markdown-it 解析，套 MPE 主题样式 |
-| 排版尺寸 | 与 Word 导出一致：正文 8.5 号、1.1 倍行距、段后 3pt；标题 13 / 12 / 11 / 10.5 / 10 / 9.5 号加粗，H1/H2 带下边框；全文第一个一级标题 18 号居中；代码 8 号 |
+| 排版尺寸 | 与 Word 导出一致：正文 8.5 号、1.2 倍行距、段后 3pt；标题 13 / 12 / 11 / 10.5 / 10 / 9.5 号加粗，H1/H2 带下边框；全文第一个一级标题 18 号居中；代码 8 号 |
 | mermaid 代码块 | 用 MPE 自带的 mermaid 库渲染为矢量图形，与预览一致 |
 | 公式（`$...$` / `$$...$$`） | 在 markdown 解析前抽取，交由 KaTeX 渲染，字体内嵌进 PDF；支持 `array`、`aligned`、`pmatrix`、`cases` 等环境与 `\\` 换行，跨行的块级公式不受影响 |
 | `tikz` 代码块 | **不渲染**，在 PDF 中以代码文本呈现（原因见下） |
