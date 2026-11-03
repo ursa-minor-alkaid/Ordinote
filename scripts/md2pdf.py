@@ -6,7 +6,7 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
 功能：
     把 markdown 笔记批量导出为 PDF，版式复用本机 Markdown Preview Enhanced
     （MPE）扩展自带的样式与图表资源；字号与标题规格对齐 Word 导出，行距
-    不小于 1.2 倍；代码块自动换行并使用浅灰底。不需要下载任何东西：解析用
+    为 1.5 倍；代码块自动换行并使用浅灰底。不需要下载任何东西：解析用
     已安装的 markdown-it-py，主题样式与 mermaid 取自 MPE 扩展目录，公式
     渲染引擎取自本机已装的其它扩展，打印用本机 Chrome / Edge 的无头模式。
 
@@ -121,7 +121,7 @@ html body {{
   print-color-adjust: exact;
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 8.5pt;
-  line-height: 1.2;
+  line-height: 1.5;
   color: #1F2328;
 }}
 html body[for="html-export"] {{ height: auto !important; overflow: visible !important; }}
@@ -131,7 +131,7 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
   font-weight: 700;
   color: #1F2328;
-  line-height: 1.2;
+  line-height: 1.5;
   break-after: avoid;
   page-break-after: avoid;
 }}
@@ -159,7 +159,7 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.2;
+  line-height: 1.5;
   font-size: 8pt;
   break-inside: auto;
   page-break-inside: auto;
@@ -171,7 +171,7 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.2;
+  line-height: 1.5;
   font-size: 8pt;
 }}
 table, blockquote, img, .mermaid {{
@@ -565,7 +565,7 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="把 markdown 批量导出为 PDF，套用 Markdown Preview Enhanced 主题，"
-                    "字号与标题规格对齐 Word 导出，行距不小于 1.2 倍",
+                    "字号与标题规格对齐 Word 导出，行距为 1.5 倍",
     )
     parser.add_argument("paths", nargs="+", help="markdown 文件或目录，可多个")
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")
