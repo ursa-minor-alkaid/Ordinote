@@ -33,8 +33,8 @@ description: "通用笔记整理相关技能，包括：初始化并整理笔记
 
 请查阅 `references/ordinote-wash.md`，其中详细定义了：
 
-- 输入来源说明（OCR 识别结果 / 录音转文字内容，各自的典型错误类型）
-- 输出文件命名规则（`笔记整理-{今日日期}.md`，YYMMDD 格式）
+- 输入来源说明（OCR 识别结果 / 录音转文字内容 / Word 提取稿 / HTML 清洗稿与提取稿，各自的典型错误类型与预处理情况）
+- 输出文件命名规则（`笔记整理-{今日日期}.md`，YYMMDD 格式；HTML 幻灯片由 `wash_html.py` 清洗时沿用 `{原文件名}-整理.md`）
 - 错别字修正原则与方法（仅修正明显错误，保持原文意思不变）
 - 公式的 LaTeX 转写规则（`$...$` / `$$...$$`，无法确定原意的保留原样并标注）
 - 输出示例
@@ -80,10 +80,10 @@ description: "通用笔记整理相关技能，包括：初始化并整理笔记
 
 请查阅 `references/ordinote-extract.md`，其中详细定义了：
 
-- 提取脚本调用（先本地脚本，失败或效果差时改用 MinerU API）；整理环节交由 `ordinote-wash` 完成
-- 提取脚本说明（`scripts/` 下的本地 PDF/PPT 脚本、本地 Word 脚本、本地 HTML 脚本与 MinerU API 四种方式；均已实现）
+- 提取脚本调用（先本地脚本，失败或效果差时改用 MinerU API）；整理环节交由 `ordinote-wash` 完成（HTML 幻灯片先由 `wash_html.py` 完成结构清洗，`ordinote-wash` 阶段只做核对）
+- 提取脚本说明（`scripts/` 下的本地 PDF/PPT 脚本、本地 Word 脚本、本地 HTML 清洗与提取脚本、MinerU API 五种方式；均已实现）
 - Word 本地提取（`extract_docx.py`：`.docx` 转 markdown，保留标题层级、列表、行内格式、表格与内嵌图片；楷体批注转淡灰色 `<mark>`，霞鹜文楷正文不误伤；支持目录批量、`--strip-version` 去版本号、`--out` 指定输出目录）
-- HTML 本地提取（`extract_html.py`：自包含 HTML 幻灯片逐页提取为 markdown，`class` 含独立单词 `slide` 的 `section` / `div` / `article` 视为一页，页间以 `---` 分隔；找不到幻灯片容器时按整页提取；只依赖标准库）
+- HTML 本地提取与清洗（`wash_html.py` 优先：自包含 HTML 幻灯片按语义重建标题、列表、表格、代码块与图注，页脚/导航/页码不入正文，data URI 图片与内联 SVG 落盘，直接产出 `{原文件名}-整理.md`；`extract_html.py` 仅逐页提取纯文本，产出 `{原文件名}-提取.md`；两者只依赖标准库）
 - MinerU 支持的输入类型（PDF/PPT/DOC 及图片 png/jpg/jpeg/jp2/webp/gif/bmp；可直接上传图片做 OCR 提取文字）
 - MinerU 支持一次上传多个文件批量提取（PDF 与图片可混用，每批 ≤ 50 个、官方单批上限 200 个，各文件分别输出）
 - MinerU Token 配置（用 PowerShell 把 Token 写入用户环境变量 `MINERU_API_TOKEN`；脚本不读磁盘 Token 文件，未配置时会给出配置指引）
