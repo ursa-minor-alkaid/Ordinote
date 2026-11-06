@@ -5,10 +5,10 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
 
 功能：
     把 markdown 笔记批量导出为 PDF，版式复用本机 Markdown Preview Enhanced
-    （MPE）扩展自带的样式与图表资源；字号与标题规格对齐 Word 导出，行距
-    为 1.5 倍；代码块自动换行并使用浅灰底。不需要下载任何东西：解析用
-    已安装的 markdown-it-py，主题样式与 mermaid 取自 MPE 扩展目录，公式
-    渲染引擎取自本机已装的其它扩展，打印用本机 Chrome / Edge 的无头模式。
+    （MPE）扩展自带的样式与图表资源；字号在 Word 导出的基础上整体加大
+    一号，行距固定 2 倍；代码块自动换行并使用浅灰底。不需要下载任何东西：
+    解析用已安装的 markdown-it-py，主题样式与 mermaid 取自 MPE 扩展目录，
+    公式渲染引擎取自本机已装的其它扩展，打印用本机 Chrome / Edge 的无头模式。
 
     公式（$...$ / $$...$$）在 markdown 解析之前抽取，交页面里的 KaTeX 渲染，
     因此 LaTeX 内容不会被 markdown 的转义、强调与段落规则改写。
@@ -112,7 +112,7 @@ DEFAULT_WAIT_MS = 3000
 
 # 追加在 MPE 样式之后的打印规则。MPE 自身不写 @page（页边距由它传给
 # puppeteer 的参数控制），纸张与边距需要在导出的 HTML 里补齐。
-# 字号、行距与标题规格对齐 md2docx.py，保证 PDF 与 Word 的版面尺寸一致。
+# 字号在 md2docx.py 的基础上整体加大一号，行距固定 2 倍。
 PRINT_CSS_TEMPLATE = """
 @page {{ size: {paper}; margin: {margin}; }}
 html, body {{ background: #fff !important; }}
@@ -120,8 +120,8 @@ html body {{
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
-  font-size: 8.5pt;
-  line-height: 1.5;
+  font-size: 9.5pt;
+  line-height: 2;
   color: #1F2328;
 }}
 html body[for="html-export"] {{ height: auto !important; overflow: visible !important; }}
@@ -131,25 +131,25 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
   font-weight: 700;
   color: #1F2328;
-  line-height: 1.5;
+  line-height: 2;
   break-after: avoid;
   page-break-after: avoid;
 }}
 .markdown-preview h1 {{
-  font-size: 13pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: 14pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 1.5pt solid #D1D9E0;
 }}
 .markdown-preview h2 {{
-  font-size: 12pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: 13pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 0.75pt solid #D1D9E0;
 }}
-.markdown-preview h3 {{ font-size: 11pt; margin: 6pt 0 4pt; }}
-.markdown-preview h4 {{ font-size: 10.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h5 {{ font-size: 10pt; margin: 6pt 0 4pt; }}
-.markdown-preview h6 {{ font-size: 9.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h1.doc-title {{ font-size: 18pt; text-align: center; }}
+.markdown-preview h3 {{ font-size: 12pt; margin: 6pt 0 4pt; }}
+.markdown-preview h4 {{ font-size: 11.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h5 {{ font-size: 11pt; margin: 6pt 0 4pt; }}
+.markdown-preview h6 {{ font-size: 10.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h1.doc-title {{ font-size: 19pt; text-align: center; }}
 .markdown-preview p {{ margin: 0 0 3pt; }}
-.markdown-preview code {{ font-family: Consolas, "Courier New", monospace; font-size: 8pt; }}
+.markdown-preview code {{ font-family: Consolas, "Courier New", monospace; font-size: 9pt; }}
 .markdown-preview pre {{
   background-color: #F6F8FA !important;
   border: 0.5pt solid #E5E9ED;
@@ -159,8 +159,8 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.5;
-  font-size: 8pt;
+  line-height: 2;
+  font-size: 9pt;
   break-inside: auto;
   page-break-inside: auto;
 }}
@@ -171,8 +171,8 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.5;
-  font-size: 8pt;
+  line-height: 2;
+  font-size: 9pt;
 }}
 table, blockquote, img, .mermaid {{
   break-inside: avoid;
@@ -565,7 +565,7 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="把 markdown 批量导出为 PDF，套用 Markdown Preview Enhanced 主题，"
-                    "字号与标题规格对齐 Word 导出，行距为 1.5 倍",
+                    "字号在 Word 导出基础上整体加大一号，行距固定 2 倍",
     )
     parser.add_argument("paths", nargs="+", help="markdown 文件或目录，可多个")
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")
