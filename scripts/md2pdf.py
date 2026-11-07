@@ -25,7 +25,7 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
     --theme NAME      预览主题，默认 github-light（对应 MPE 的 preview_theme）
     --prism NAME      代码块配色主题，默认 github（对应 MPE 的 prism_theme）
     --paper SIZE      纸张尺寸，默认 A4
-    --margin VALUE    页边距，默认 "1.4cm 1.3cm"
+    --margin VALUE    页边距，默认 "1cm 1.8cm"
     --wait MS         页面渲染等待时间（毫秒），默认 3000
     --chrome PATH     指定浏览器可执行文件
     --mpe DIR         指定 MPE 扩展目录或其 crossnote 子目录
@@ -107,12 +107,12 @@ BROWSER_CANDIDATES = [
 DEFAULT_THEME = "github-light"
 DEFAULT_PRISM = "github"
 DEFAULT_PAPER = "A4"
-DEFAULT_MARGIN = "1.4cm 1.3cm"
+DEFAULT_MARGIN = "1cm 1.8cm"
 DEFAULT_WAIT_MS = 3000
 
 # 追加在 MPE 样式之后的打印规则。MPE 自身不写 @page（页边距由它传给
 # puppeteer 的参数控制），纸张与边距需要在导出的 HTML 里补齐。
-# 字号在 md2docx.py 的基础上整体加大一号，行距固定 2 倍。
+# 正文字号在 md2docx.py 的基础上加大 0.5 号，标题加大一号，行距固定 2 倍。
 PRINT_CSS_TEMPLATE = """
 @page {{ size: {paper}; margin: {margin}; }}
 html, body {{ background: #fff !important; }}
@@ -120,7 +120,7 @@ html body {{
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
-  font-size: 9.5pt;
+  font-size: 10pt;
   line-height: 2;
   color: #1F2328;
 }}
@@ -136,18 +136,18 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   page-break-after: avoid;
 }}
 .markdown-preview h1 {{
-  font-size: 14pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: 15pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 1.5pt solid #D1D9E0;
 }}
 .markdown-preview h2 {{
-  font-size: 13pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: 14pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 0.75pt solid #D1D9E0;
 }}
-.markdown-preview h3 {{ font-size: 12pt; margin: 6pt 0 4pt; }}
-.markdown-preview h4 {{ font-size: 11.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h5 {{ font-size: 11pt; margin: 6pt 0 4pt; }}
-.markdown-preview h6 {{ font-size: 10.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h1.doc-title {{ font-size: 19pt; text-align: center; }}
+.markdown-preview h3 {{ font-size: 13pt; margin: 6pt 0 4pt; }}
+.markdown-preview h4 {{ font-size: 12.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h5 {{ font-size: 12pt; margin: 6pt 0 4pt; }}
+.markdown-preview h6 {{ font-size: 11.5pt; margin: 6pt 0 4pt; }}
+.markdown-preview h1.doc-title {{ font-size: 20pt; text-align: center; }}
 .markdown-preview p {{ margin: 0 0 3pt; }}
 .markdown-preview code {{ font-family: Consolas, "Courier New", monospace; font-size: 9pt; }}
 .markdown-preview pre {{
@@ -565,7 +565,7 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="把 markdown 批量导出为 PDF，套用 Markdown Preview Enhanced 主题，"
-                    "字号在 Word 导出基础上整体加大一号，行距固定 2 倍",
+                    "正文字号在 Word 导出基础上加大 0.5 号、标题加大一号，行距固定 2 倍",
     )
     parser.add_argument("paths", nargs="+", help="markdown 文件或目录，可多个")
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")

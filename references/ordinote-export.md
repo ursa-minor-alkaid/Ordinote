@@ -4,7 +4,7 @@
 
 把 markdown 笔记导出为 PDF 或 Word（.docx），支持单个文件，也支持整个目录批量导出。两种格式使用不同脚本与渲染方案：
 
-- **PDF**（`scripts/md2pdf.py`）：版式复用本机 Markdown Preview Enhanced（MPE）扩展自带的样式与图表资源，字号在 Word 导出基础上整体加大一号，行距固定 2 倍；代码块自动换行、使用浅灰底，不出现横向滚动条。
+- **PDF**（`scripts/md2pdf.py`）：版式复用本机 Markdown Preview Enhanced（MPE）扩展自带的样式与图表资源，正文字号在 Word 导出基础上加大 0.5 号、标题加大一号，行距固定 2 倍；代码块自动换行、使用浅灰底，不出现横向滚动条。
 - **Word**（`scripts/md2docx.py`）：用 python-docx 直接生成 .docx，尽量忠实还原 markdown 原始效果，包括标题等级、文字高亮与背景色、图片插入、表格、列表等。Word 导出不依赖 MPE 扩展与浏览器。
 
 本功能**只负责导出**：源笔记只读，导出过程不修改、不移动、不重命名任何笔记文件。导出物属于对外输出物，不参与 `ordinote-wash` / `ordinote-standardize` 等整理链路。
@@ -39,7 +39,7 @@ python scripts/md2pdf.py <文件或目录路径> [更多路径...]
 | `--theme <名称>` | 预览主题，默认 `github-light`，可取 `crossnote/styles/preview_theme/` 下的任意主题名 |
 | `--prism <名称>` | 代码块配色主题，默认 `github` |
 | `--paper <尺寸>` | 纸张，默认 `A4` |
-| `--margin <边距>` | 页边距，默认 `1.4cm 1.3cm` |
+| `--margin <边距>` | 页边距，默认 `1cm 1.8cm`（上下 1cm，左右 1.8cm） |
 | `--wait <毫秒>` | 页面渲染等待时间，默认 3000；图表较多时可调大 |
 | `--skip-existing` | 已有同名 PDF 时跳过 |
 | `--exclude <正则>` | 按路径正则排除文件 |
@@ -58,7 +58,7 @@ python scripts/md2pdf.py 第一章.md 第二章.md --theme vue --paper A3
 | 内容 | 处理方式 |
 |---|---|
 | 标题、段落、列表、表格、引用 | 由 markdown-it 解析，套 MPE 主题样式 |
-| 排版尺寸 | 字号在 Word 导出基础上整体加大一号：正文 9.5pt、2 倍行距、段后 3pt；标题 14 / 13 / 12 / 11.5 / 11 / 10.5pt 加粗，H1/H2 带下边框；全文第一个一级标题 19pt 居中；代码 9pt |
+| 排版尺寸 | 正文字号在 Word 导出基础上加大 0.5 号、标题加大一号：正文 10pt、2 倍行距、段后 3pt；标题 15 / 14 / 13 / 12.5 / 12 / 11.5pt 加粗，H1/H2 带下边框；全文第一个一级标题 20pt 居中；代码 9pt |
 | mermaid 代码块 | 用 MPE 自带的 mermaid 库渲染为矢量图形，与预览一致 |
 | 公式（`$...$` / `$$...$$`） | 在 markdown 解析前抽取，交由 KaTeX 渲染，字体内嵌进 PDF；支持 `array`、`aligned`、`pmatrix`、`cases` 等环境与 `\\` 换行，跨行的块级公式不受影响 |
 | `tikz` 代码块 | **不渲染**，在 PDF 中以代码文本呈现（原因见下） |
