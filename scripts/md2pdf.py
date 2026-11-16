@@ -17,6 +17,10 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
 
     源笔记只读，脚本不修改、不移动任何笔记文件。
 
+    导出后会读取 PDF 内容流反推整页缩放系数：文档出现横向溢出时 Chrome 会
+    先按内容宽度排版，再整页等比缩到纸面，正文实际字号随之变小。检测到缩放
+    的文件标记为「缩放」并给出实际字号，退出码不受影响。
+
 用法：
     python md2pdf.py <文件或目录路径> [更多路径...] [选项]
 
@@ -50,6 +54,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zlib
 from pathlib import Path
 
 try:
@@ -149,7 +154,15 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
 .markdown-preview h6 {{ font-size: 11.5pt; margin: 6pt 0 4pt; }}
 .markdown-preview h1.doc-title {{ font-size: 20pt; text-align: center; }}
 .markdown-preview p {{ margin: 0 0 3pt; }}
-.markdown-preview code {{ font-family: Consolas, "Courier New", monospace; font-size: 9pt; }}
+/* 主题给 code 设了 white-space: pre，行内代码遇到超长串会撑宽版心 */
+.markdown-preview code {{
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9pt;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}}
+/* 宽表的最小内容宽度同样会撑宽版心，允许单元格内任意断行以压回版心 */
+.markdown-preview td, .markdown-preview th {{ overflow-wrap: anywhere; }}
 .markdown-preview pre {{
   background-color: #F6F8FA !important;
   border: 0.5pt solid #E5E9ED;
@@ -201,6 +214,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>
 """
 
+# output: "html" 不生成 KaTeX 的 MathML 副本。该副本是绝对定位的隐藏元素，
+# 在打印排版里仍会计入页面宽度，把版心撑宽，Chrome 随即整页等比缩小到纸面，
+# 正文实际字号低于 CSS 声明值。
 MATH_SCRIPT_TEMPLATE = """<script src="{katex_js}"></script>
 <script>
 document.querySelectorAll("span.math").forEach(function (el) {{
@@ -208,6 +224,7 @@ document.querySelectorAll("span.math").forEach(function (el) {{
   try {{
     katex.render(tex, el, {{
       displayMode: el.classList.contains("math-display"),
+      output: "html",
       throwOnError: false
     }});
   }} catch (err) {{
@@ -347,10 +364,14 @@ def inline_fonts(css, base_dir):
 # 公式扫描。必须在 markdown 解析之前完成：markdown 的转义规则会把 LaTeX 里的
 # \\ \_ \{ \} \* 改写成别的字符，块级公式也会被段落切分打断。
 # code 分支保证围栏之外的行内代码里的 $ 不被当作公式。
+# inline 分支的 (?!\d) 用来排除 $100 一类金额；inline_tex 供「以反斜杠命令开头、
+# 结束符后紧跟数字」的写法使用（如 $\beta$1-4 这类糖苷键记号），不以命令开头
+# 的内容仍不会误判。
 MATH_SCAN_RE = re.compile(
     r"(?P<code>`[^`\n]*`)"
     r"|(?P<display>(?<!\\)\$\$[\s\S]+?(?<!\\)\$\$)"
     r"|(?P<inline>(?<!\\)\$(?![\s$])(?:[^$\n]|\\\$)+?(?<![\\\s])(?<!\\)\$(?!\d))"
+    r"|(?P<inline_tex>(?<!\\)\$(?![\s$])\\[A-Za-z]+(?:[^$\n]|\\\$)*?(?<![\\\s])(?<!\\)\$)"
 )
 
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
@@ -510,6 +531,42 @@ def render_pdf(html_text, pdf_path, browser, wait_ms):
     return size
 
 
+# Chrome 打印 PDF 的内容流开头有一段 q k 0 0 k x y cm，k 为 1 CSS px 对应的
+# 内部单位（未缩放时 3.125，即 1 px = 0.75 pt 除以固定的 0.24）。文档出现横向
+# 溢出时，Chrome 先按文档所需宽度排版，再把整页等比缩到纸面，k 随之成比例变小，
+# 因此 k / 3.125 就是整页缩放系数，正文实际字号 = 声明字号 × 该系数。
+PDF_PX_UNIT = 3.125
+SCALE_WARN_THRESHOLD = 0.98
+CONTENT_MATRIX_RE = re.compile(rb"q\s+([\d.]+)\s+0\s+0\s+(-?[\d.]+)\s+[\d.]+\s+[\d.]+\s+cm")
+
+
+def detect_pdf_scale(pdf_path, max_stream_bytes=8 * 1024 * 1024):
+    """从 PDF 内容流反推整页缩放系数，读不出时返回 None。
+
+    作为兜底检查使用：依赖 Chrome 的输出写法，取不到就跳过，不影响导出。
+    """
+    try:
+        data = Path(pdf_path).read_bytes()
+    except OSError:
+        return None
+    for match in re.finditer(rb"stream\r?\n", data):
+        start = match.end()
+        end = data.find(b"endstream", start)
+        if end < 0 or end - start > max_stream_bytes:
+            continue
+        try:
+            raw = zlib.decompress(data[start:end])
+        except zlib.error:
+            continue
+        hit = CONTENT_MATRIX_RE.search(raw)
+        if hit:
+            try:
+                return float(hit.group(1)) / PDF_PX_UNIT
+            except ValueError:
+                return None
+    return None
+
+
 # ------------------------------------------------------------
 # 批处理
 # ------------------------------------------------------------
@@ -559,7 +616,12 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
         margin=opts.margin,
     )
     size = render_pdf(page, pdf_path, browser, opts.wait)
-    return "ok", f"{pdf_path}（{size / 1024:.0f} KB）"
+    summary = f"{pdf_path}（{size / 1024:.0f} KB）"
+    scale = detect_pdf_scale(pdf_path)
+    if scale is not None and scale < SCALE_WARN_THRESHOLD:
+        return "warn", (f"{summary}；版面超出版心，整页被缩放到 {scale:.2f} 倍，"
+                        f"正文约 {10 * scale:.1f}pt")
+    return "ok", summary
 
 
 def parse_args(argv):
@@ -630,8 +692,9 @@ def main(argv=None):
         print("[提示] 没有匹配的 markdown 文件")
         return 0
 
-    counts = {"ok": 0, "skip": 0, "fail": 0}
-    failures = []
+    counts = {"ok": 0, "warn": 0, "skip": 0, "fail": 0}
+    failures, warnings = [], []
+    labels = {"ok": "成功", "warn": "缩放", "skip": "跳过", "fail": "失败"}
     for md_path in targets:
         try:
             status, message = process_one(md_path, opts, styles, mpe_dir, katex_dir, browser)
@@ -640,13 +703,17 @@ def main(argv=None):
         counts[status] += 1
         if status == "fail":
             failures.append((md_path, message))
-        print(f"[{'成功' if status == 'ok' else '跳过' if status == 'skip' else '失败'}] "
-              f"{md_path} -> {message}")
+        elif status == "warn":
+            warnings.append((md_path, message))
+        print(f"[{labels[status]}] {md_path} -> {message}")
 
     print(f"\n共 {len(targets)} 个文件：成功 {counts['ok']}，跳过 {counts['skip']}，"
-          f"失败 {counts['fail']}")
+          f"失败 {counts['fail']}"
+          + (f"，版面被缩放 {counts['warn']}" if counts["warn"] else ""))
     for md_path, message in failures:
         print(f"  失败原因：{md_path} -> {message}")
+    for md_path, message in warnings:
+        print(f"  版面被缩放：{md_path} -> {message}")
     return 2 if counts["fail"] else 0
 
 

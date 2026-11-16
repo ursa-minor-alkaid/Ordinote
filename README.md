@@ -27,7 +27,7 @@
 | `scripts/extract_html.py`   | 本地提取自包含 HTML 幻灯片的逐页文字，生成 `{原文件名}-提取.md`；`class` 含独立单词 `slide` 的 `section` / `div` / `article` 视为一页，页间以 `---` 分隔；表格单元格以 ` \| ` 分隔，图片记 `[IMG]` 或 `[IMG:alt]`；找不到幻灯片容器时按整页提取；只依赖标准库 |
 | `scripts/wash_html.py`      | 本地清洗自包含 HTML 幻灯片，生成 `{原文件名}-整理.md`；按语义重建标题层级（封面 `#`、Part 页 `##`、内容页 `###`）、列表、表格、代码块、图注、定义列表与引用，页脚/导航/页码等装饰不入正文，页间以 `---` 分隔；data URI 图片解码落盘、内联 SVG 存为独立文件并恢复驼峰属性、相对路径图片复制，资源写入 `assets/images/{前缀}-figs/` 与 `assets/svgs/{前缀}-svgs/`；支持目录批量、`--out` / `--outdir` / `--assets` / `--prefix` / `--skip-existing`；只依赖标准库 |
 | `scripts/mineru_api.py`    | MinerU 精准解析 API（云端备选），适用于扫描件、复杂版式；支持 PDF/PPT/DOC 及图片（png/jpg/jpeg/jp2/webp/gif/bmp）OCR，支持多文件批量（每批 ≤ 50 个）与指定页码解析；默认只输出 Markdown，显式加 `--save-json` 时才额外保存 `content_list.json` 与 `layout.json`，不导出图片；Token 通过 PowerShell 配置到环境变量 `MINERU_API_TOKEN` |
-| `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式复用本机 MPE 扩展样式：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；正文字号在 Word 导出基础上加大 0.5 号、标题加大一号，行距 2 倍，代码块自动换行并使用浅灰底；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
+| `scripts/md2pdf.py`        | 批量把 markdown 笔记导出为 PDF，版式复用本机 MPE 扩展样式：无头 Chrome 打印，样式与 mermaid 取自本机 MPE 扩展，公式用 KaTeX 渲染并内嵌字体；正文字号在 Word 导出基础上加大 0.5 号、标题加大一号，行距 2 倍，代码块自动换行并使用浅灰底；导出后自检整页缩放并在汇总中单独提示；需要本机已装 MPE 扩展与 Chrome/Edge，不下载依赖，源笔记只读 |
 | `scripts/md2docx.py`       | 批量把 markdown 笔记导出为 Word（.docx）：python-docx 原生构建，还原 Heading 1-6 标题样式、加粗/斜体/删除线/下划线、`<mark>` 与 span 的任意背景色文字底纹、行内代码与代码块、引用、嵌套列表、表格、超链接与图片（本地/远程/data URI，按版心缩放）；公式转成 Word 原生公式对象（OMML），转换失败时退回 LaTeX 原文；基础依赖 `python-docx`、`markdown-it-py`，公式的附加依赖见“导出 Word”；源笔记只读 |
 
 ## 使用
@@ -78,6 +78,18 @@ python scripts/md2pdf.py <文件或目录> [--out 输出目录] [--theme github-
 输出默认放在源文件同目录、与源文件同名；完整选项与降级行为见 `references/ordinote-export.md`。
 
 已知差异：公式与 mermaid 图正常渲染；代码块无语法高亮；`tikz` 代码块不渲染（MPE 的 tikz 引擎在扩展内部，外部脚本无法调用），在 PDF 中以代码文本呈现。
+
+#### 注意：整页字号缩放
+
+Chrome 打印时会先按文档所需宽度排版，再整页等比缩到纸面。笔记里一旦出现「无法再压缩」的宽内容，整页字号会一起缩小（实测 0.68 ~ 0.88 倍，10pt 正文变成 6.8 ~ 8.8pt）。此时边距、页数、排版都正常，单独看一份 PDF 很难察觉。
+
+脚本已处理最常见的情况：KaTeX 隐藏的 MathML 副本、宽表、超长行内代码。仍可能触发缩放的场景：
+
+- 多层缩进列表中的行间公式 `$$...$$`，且公式本身较宽
+- 不含空格的超长单词、路径、哈希或 base64 串
+- 其他不可断行、总宽度超过 658 px（A4、左右 1.8cm 边距下的版心宽度）的内容
+
+每次导出结束后，脚本会读取 PDF 内容流反推缩放系数；受影响的文件标记为 `[缩放]`，并给出实际倍数与正文字号。看到该标记时，按对应内容处理后再重跑：宽公式移出列表或拆成多行，宽表拆成两张或缩短单元格文字，长串手动断行。缩放消失后页数会明显增加，这是字号恢复到设计值后的预期结果，不是导出异常。
 
 ### 导出 Word
 
