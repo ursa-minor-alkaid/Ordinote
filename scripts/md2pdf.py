@@ -10,6 +10,10 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
     解析用已安装的 markdown-it-py，主题样式与 mermaid 取自 MPE 扩展目录，
     公式渲染引擎取自本机已装的其它扩展，打印用本机 Chrome / Edge 的无头模式。
 
+    版式分普通与紧凑两档，默认为普通档；紧凑档所有字号各减一号、行距改为
+    1.75，上下页边距减半、左右不变。图片显式宽度两档都收窄：普通档 90%，
+    紧凑档 70%，换算为 px 后向下取整。紧凑档仅在显式指定 --compact 时启用。
+
     公式（$...$ / $$...$$）在 markdown 解析之前抽取，交页面里的 KaTeX 渲染，
     因此 LaTeX 内容不会被 markdown 的转义、强调与段落规则改写。
     tikz 代码块不渲染：MPE 的 tikz 由扩展宿主内置的 wasm TeX 引擎生成，
@@ -29,7 +33,9 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
     --theme NAME      预览主题，默认 github-light（对应 MPE 的 preview_theme）
     --prism NAME      代码块配色主题，默认 github（对应 MPE 的 prism_theme）
     --paper SIZE      纸张尺寸，默认 A4
-    --margin VALUE    页边距，默认 "1cm 1.8cm"
+    --margin VALUE    页边距，默认随档位（普通 "1cm 1.8cm"，紧凑 "0.5cm 1.8cm"）
+    --compact         使用紧凑档：字号各减一号、行距 1.75、上下页边距减半、
+                      图片显式宽度收为 70%（普通档为 90%，均向下取整）
     --wait MS         页面渲染等待时间（毫秒），默认 3000
     --chrome PATH     指定浏览器可执行文件
     --mpe DIR         指定 MPE 扩展目录或其 crossnote 子目录
@@ -48,6 +54,7 @@ Markdown 批量导出 PDF 脚本（ordinote-export 功能）
 import argparse
 import base64
 import html as html_lib
+import math
 import os
 import re
 import shutil
@@ -112,12 +119,33 @@ BROWSER_CANDIDATES = [
 DEFAULT_THEME = "github-light"
 DEFAULT_PRISM = "github"
 DEFAULT_PAPER = "A4"
-DEFAULT_MARGIN = "1cm 1.8cm"
 DEFAULT_WAIT_MS = 3000
+
+# 两档版式。普通档为默认；紧凑档所有字号比普通档小一号（1pt），行距 1.75，
+# 上下页边距减半、左右不变。图片显式宽度两档都收窄：普通档 90%，紧凑档 70%，
+# 换算为 px 后向下取整。
+PRESETS = {
+    "normal": {
+        "label": "普通",
+        "body": 10, "h1": 15, "h2": 14, "h3": 13, "h4": 12.5,
+        "h5": 12, "h6": 11.5, "doc_title": 20, "code": 9,
+        "line_height": 2,
+        "margin": "1cm 1.8cm",
+        "image_width_scale": 0.9,
+    },
+    "compact": {
+        "label": "紧凑",
+        "body": 9, "h1": 14, "h2": 13, "h3": 12, "h4": 11.5,
+        "h5": 11, "h6": 10.5, "doc_title": 19, "code": 8,
+        "line_height": 1.75,
+        "margin": "0.5cm 1.8cm",
+        "image_width_scale": 0.7,
+    },
+}
 
 # 追加在 MPE 样式之后的打印规则。MPE 自身不写 @page（页边距由它传给
 # puppeteer 的参数控制），纸张与边距需要在导出的 HTML 里补齐。
-# 正文字号在 md2docx.py 的基础上加大 0.5 号，标题加大一号，行距固定 2 倍。
+# 字号取自 PRESETS：普通档正文在 md2docx.py 的基础上加大 0.5 号、标题加大一号。
 PRINT_CSS_TEMPLATE = """
 @page {{ size: {paper}; margin: {margin}; }}
 html, body {{ background: #fff !important; }}
@@ -125,8 +153,8 @@ html body {{
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
-  font-size: 10pt;
-  line-height: 2;
+  font-size: {body}pt;
+  line-height: {line_height};
   color: #1F2328;
 }}
 html body[for="html-export"] {{ height: auto !important; overflow: visible !important; }}
@@ -136,28 +164,28 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   font-family: Calibri, "Microsoft YaHei", "微软雅黑", sans-serif;
   font-weight: 700;
   color: #1F2328;
-  line-height: 2;
+  line-height: {line_height};
   break-after: avoid;
   page-break-after: avoid;
 }}
 .markdown-preview h1 {{
-  font-size: 15pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: {h1}pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 1.5pt solid #D1D9E0;
 }}
 .markdown-preview h2 {{
-  font-size: 14pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
+  font-size: {h2}pt; margin: 10pt 0 4pt; padding-bottom: 4pt;
   border-bottom: 0.75pt solid #D1D9E0;
 }}
-.markdown-preview h3 {{ font-size: 13pt; margin: 6pt 0 4pt; }}
-.markdown-preview h4 {{ font-size: 12.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h5 {{ font-size: 12pt; margin: 6pt 0 4pt; }}
-.markdown-preview h6 {{ font-size: 11.5pt; margin: 6pt 0 4pt; }}
-.markdown-preview h1.doc-title {{ font-size: 20pt; text-align: center; }}
+.markdown-preview h3 {{ font-size: {h3}pt; margin: 6pt 0 4pt; }}
+.markdown-preview h4 {{ font-size: {h4}pt; margin: 6pt 0 4pt; }}
+.markdown-preview h5 {{ font-size: {h5}pt; margin: 6pt 0 4pt; }}
+.markdown-preview h6 {{ font-size: {h6}pt; margin: 6pt 0 4pt; }}
+.markdown-preview h1.doc-title {{ font-size: {doc_title}pt; text-align: center; }}
 .markdown-preview p {{ margin: 0 0 3pt; }}
 /* 主题给 code 设了 white-space: pre，行内代码遇到超长串会撑宽版心 */
 .markdown-preview code {{
   font-family: Consolas, "Courier New", monospace;
-  font-size: 9pt;
+  font-size: {code}pt;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }}
@@ -172,8 +200,8 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 2;
-  font-size: 9pt;
+  line-height: {line_height};
+  font-size: {code}pt;
   break-inside: auto;
   page-break-inside: auto;
 }}
@@ -184,8 +212,8 @@ html body[for="html-export"] {{ height: auto !important; overflow: visible !impo
   white-space: pre-wrap !important;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 2;
-  font-size: 9pt;
+  line-height: {line_height};
+  font-size: {code}pt;
 }}
 table, blockquote, img, .mermaid {{
   break-inside: avoid;
@@ -452,10 +480,66 @@ def mark_doc_title(body):
     return re.sub(r"<h1([^>]*)>", replace, body, count=1)
 
 
-def build_html(body, styles, base_dir, title, browser_assets, paper, margin):
+# 图片显式宽度的收窄规则。只处理写在 img 标签上的宽度：width 属性或
+# style 里的 width。绝对单位先换算成 px 再缩放，结果向下取整。
+LENGTH_UNITS_TO_PX = {"px": 1.0, "pt": 4 / 3, "cm": 96 / 2.54, "mm": 96 / 25.4, "in": 96.0}
+IMG_TAG_RE = re.compile(r"<img\b[^>]*>", re.I)
+IMG_STYLE_ATTR_RE = re.compile(r"""(style\s*=\s*)(["'])(.*?)\2""", re.I | re.S)
+IMG_STYLE_WIDTH_RE = re.compile(r"(width\s*:\s*)([\d.]+)\s*(px|pt|cm|mm|in|%)?", re.I)
+IMG_WIDTH_ATTR_RE = re.compile(
+    r"((?<![\w-])width\s*=\s*)([\"']?)\s*([\d.]+)\s*(px|pt|cm|mm|in|%)?\s*(\2)", re.I)
+
+
+def _scale_length(raw, unit, ratio):
+    """把长度值乘以 ratio；绝对单位换算为 px 后向下取整，百分比取整后保留 %。
+
+    先按 6 位小数归一化再取整，避免 70 × 0.7 这类二进制浮点误差把整数算成 48.999…。
+    """
+    try:
+        num = float(raw)
+    except (TypeError, ValueError):
+        return None
+    unit = (unit or "px").lower()
+    if unit == "%":
+        return f"{math.floor(round(num * ratio, 6))}%"
+    factor = LENGTH_UNITS_TO_PX.get(unit)
+    if factor is None:
+        return None
+    return f"{math.floor(round(num * factor * ratio, 6))}px"
+
+
+def scale_image_widths(body, ratio):
+    """按比例收窄 img 的显式宽度；未写宽度的图片保持原样。"""
+    def replace_style(match):
+        def replace_width(width_match):
+            scaled = _scale_length(width_match.group(2), width_match.group(3), ratio)
+            if scaled is None:
+                return width_match.group(0)
+            return f"{width_match.group(1)}{scaled}"
+
+        style = IMG_STYLE_WIDTH_RE.sub(replace_width, match.group(3))
+        return f"{match.group(1)}{match.group(2)}{style}{match.group(2)}"
+
+    def replace_tag(match):
+        tag = IMG_STYLE_ATTR_RE.sub(replace_style, match.group(0))
+
+        def replace_width(width_match):
+            scaled = _scale_length(width_match.group(3), width_match.group(4), ratio)
+            if scaled is None:
+                return width_match.group(0)
+            return f"{width_match.group(1)}{scaled}"
+
+        return IMG_WIDTH_ATTR_RE.sub(replace_width, tag)
+
+    return IMG_TAG_RE.sub(replace_tag, body)
+
+
+def build_html(body, styles, base_dir, title, browser_assets, paper, margin, preset):
     """组装完整页面：MPE 骨架 + 内联样式 + 本地脚本。"""
     css_parts = list(styles)
-    css_parts.append(PRINT_CSS_TEMPLATE.format(paper=paper, margin=margin))
+    sizes = {key: value for key, value in preset.items()
+             if key not in ("label", "margin", "image_width_scale")}
+    css_parts.append(PRINT_CSS_TEMPLATE.format(paper=paper, margin=margin, **sizes))
 
     scripts = ""
     if "<div class=\"mermaid\">" in body:
@@ -605,6 +689,7 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
     out_dir.mkdir(parents=True, exist_ok=True)
     body = md_to_html_body(strip_front_matter(read_text(md_path)))
     body = mark_doc_title(body)
+    body = scale_image_widths(body, opts.preset["image_width_scale"])
     page = build_html(
         body=body,
         styles=styles,
@@ -614,33 +699,44 @@ def process_one(md_path, opts, styles, mpe_dir, katex_dir, browser):
                         "katex": katex_dir},
         paper=opts.paper,
         margin=opts.margin,
+        preset=opts.preset,
     )
     size = render_pdf(page, pdf_path, browser, opts.wait)
     summary = f"{pdf_path}（{size / 1024:.0f} KB）"
     scale = detect_pdf_scale(pdf_path)
     if scale is not None and scale < SCALE_WARN_THRESHOLD:
+        body_pt = opts.preset["body"] * scale
         return "warn", (f"{summary}；版面超出版心，整页被缩放到 {scale:.2f} 倍，"
-                        f"正文约 {10 * scale:.1f}pt")
+                        f"正文约 {body_pt:.1f}pt")
     return "ok", summary
 
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         description="把 markdown 批量导出为 PDF，套用 Markdown Preview Enhanced 主题，"
-                    "正文字号在 Word 导出基础上加大 0.5 号、标题加大一号，行距固定 2 倍",
+                    "默认普通档（正文 10pt、行距 2 倍、图片宽度 90%）；--compact 切换紧凑档"
+                    "（字号各减一号、行距 1.75、上下页边距减半、图片宽度 70%）",
     )
     parser.add_argument("paths", nargs="+", help="markdown 文件或目录，可多个")
     parser.add_argument("--out", help="输出目录，默认与源文件同目录")
     parser.add_argument("--theme", default=DEFAULT_THEME, help=f"预览主题，默认 {DEFAULT_THEME}")
     parser.add_argument("--prism", default=DEFAULT_PRISM, help=f"代码块配色，默认 {DEFAULT_PRISM}")
     parser.add_argument("--paper", default=DEFAULT_PAPER, help=f"纸张尺寸，默认 {DEFAULT_PAPER}")
-    parser.add_argument("--margin", default=DEFAULT_MARGIN, help=f"页边距，默认 {DEFAULT_MARGIN}")
+    parser.add_argument("--margin", help='页边距，默认随档位：普通 "1cm 1.8cm"，'
+                                         '紧凑 "0.5cm 1.8cm"')
+    parser.add_argument("--compact", action="store_true",
+                        help="使用紧凑档：字号各减一号、行距 1.75、上下页边距减半、"
+                             "图片显式宽度收为 70%")
     parser.add_argument("--wait", type=int, default=DEFAULT_WAIT_MS, help="渲染等待毫秒数")
     parser.add_argument("--chrome", help="浏览器可执行文件路径")
     parser.add_argument("--mpe", help="MPE 扩展目录或其 crossnote 子目录")
     parser.add_argument("--skip-existing", action="store_true", help="已有同名 PDF 时跳过")
     parser.add_argument("--exclude", help="按路径正则排除文件")
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+    opts.preset = PRESETS["compact" if opts.compact else "normal"]
+    if not opts.margin:
+        opts.margin = opts.preset["margin"]
+    return opts
 
 
 def load_styles(mpe_dir, theme, prism, katex_dir):
@@ -675,6 +771,9 @@ def main(argv=None):
 
     katex_dir = find_katex_dist()
     styles, notes = load_styles(mpe_dir, opts.theme, opts.prism, katex_dir)
+    print(f"[版式] {opts.preset['label']}档：正文 {opts.preset['body']}pt，"
+          f"行距 {opts.preset['line_height']}，页边距 {opts.margin}，"
+          f"图片宽度 {opts.preset['image_width_scale']:.0%}")
     if katex_dir is None:
         notes.append("未找到 KaTeX 渲染引擎，公式将以原始 LaTeX 文本呈现")
     if notes:
